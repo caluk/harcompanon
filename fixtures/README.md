@@ -28,6 +28,14 @@ bodies. Before adding a fixture:
 - Note: preprocessing removes *non-JSON noise*, **not secrets** — it keeps request and
   response bodies. Redaction is on you, not the tool.
 
+`preprocess` runs a mechanical **secrets/PII scan** over the raw HAR and warns you (a
+safety guardrail — it never touches the cleaned evidence). It's heuristic: a clean result
+is not a guarantee, and it can flag false positives. Get the full masked report with:
+
+```
+harcompanon preprocess fixtures/<name>.har -o /dev/null --security-report report.md
+```
+
 ## How it's used
 
 ```

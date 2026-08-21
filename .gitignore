@@ -224,3 +224,5 @@ __marimo__/
 # Local, git-ignored provider secrets file (see .env.example for the keys).
 /.secrets.toml
 /secrets.local.*
+# macOS Finder cruft
+.DS_Store
