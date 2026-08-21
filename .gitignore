@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- harcompañon project-specific ---
+# Working run outputs are disposable; only promoted example runs are committed.
+/runs/
+!/examples/
+# Local, git-ignored provider secrets file (see .env.example for the keys).
+/.secrets.toml
+/secrets.local.*
