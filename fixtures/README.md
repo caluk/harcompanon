@@ -1,0 +1,45 @@
+# fixtures/
+
+This is the home for **frozen HAR fixtures** — the real evidence artifacts the benchmark
+runs on. Drop a `.har` file here:
+
+```
+fixtures/<descriptive-name>.har
+```
+
+e.g. `fixtures/acme-checkout-session.har` (lowercase, no spaces).
+
+## What a fixture is (and isn't)
+
+- **Frozen and committed.** A fixture is checked into the repo **byte-identical** and never
+  changes. That is what makes reruns comparable months apart, and across new model releases.
+- **Real, not synthetic.** One real captured session beats a made-up scenario (see the
+  project brief). This is deliberately *not* the same as [`tests/data/`](../tests/data),
+  which holds throwaway sample HARs used only by this repo's conventional software tests.
+
+## ⚠️ Redact before committing
+
+This is a **public repo**, and a fixture is committed as-is. Real HAR captures routinely
+contain **auth tokens, cookies, session IDs, API keys, and personal data** in headers and
+bodies. Before adding a fixture:
+
+- Only commit a capture you are comfortable being **public and permanent**.
+- **Redact** sensitive values first (or capture against a throwaway/test account).
+- Note: preprocessing removes *non-JSON noise*, **not secrets** — it keeps request and
+  response bodies. Redaction is on you, not the tool.
+
+## How it's used
+
+```
+harcompanon preprocess fixtures/<name>.har
+```
+
+strips the HAR down to its JSON API calls (mechanical noise removal only) so it can be sent,
+identically, to each model at each prompt. Preprocessing never interprets or highlights the
+evidence.
+
+## Provenance
+
+When you add a fixture, record where it came from (one line per fixture):
+
+<!-- - `acme-checkout-session.har` — captured 2026-08-21, ACME staging checkout flow, test account, tokens redacted. -->
