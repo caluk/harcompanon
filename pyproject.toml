@@ -19,6 +19,7 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     "typer>=0.12",
+    "pydantic>=2.7",
 ]
 
 [project.optional-dependencies]
@@ -56,6 +57,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 python_version = "3.11"
 strict = true
 files = ["src", "tests"]
+plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
