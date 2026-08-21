@@ -14,7 +14,7 @@ from typing import Annotated
 import typer
 
 from harcompanon import __version__
-from harcompanon.preprocess import preprocess_file
+from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
 
 app = typer.Typer(
     add_completion=False,
@@ -54,19 +54,46 @@ def preprocess(
         Path | None,
         typer.Option("--output", "-o", help="Write the cleaned JSON here (default: stdout)."),
     ] = None,
+    security_report: Annotated[
+        Path | None,
+        typer.Option("--security-report", help="Write the full masked security report here."),
+    ] = None,
+    security_scan: Annotated[
+        bool,
+        typer.Option(
+            "--security-scan/--no-security-scan",
+            help="Scan the raw HAR for secrets/PII and warn (safety guardrail).",
+        ),
+    ] = True,
 ) -> None:
     """Strip a HAR down to its JSON API calls (mechanical noise removal only)."""
-    artifact = preprocess_file(har)
+    raw = load_har(har)
+    artifact = preprocess_har(raw, source_har=har.name)
     payload = artifact.to_canonical_json()
+
     if output is None:
         typer.echo(payload, nl=False)
-        return
-    output.write_text(payload, encoding="utf-8")
-    typer.secho(
-        f"Kept {artifact.kept_entries}/{artifact.total_entries} calls -> {output}",
-        fg=typer.colors.GREEN,
-        err=True,
-    )
+    else:
+        output.write_text(payload, encoding="utf-8")
+        typer.secho(
+            f"Kept {artifact.kept_entries}/{artifact.total_entries} calls -> {output}",
+            fg=typer.colors.GREEN,
+            err=True,
+        )
+
+    # Safety guardrail: mechanical secrets/PII scan of the RAW HAR (what gets committed).
+    # Reported separately; it never touches the cleaned evidence above.
+    if security_scan:
+        report = SecurityScanner().scan(raw, source_har=har.name)
+        colour = (
+            typer.colors.RED
+            if report.has_high()
+            else (typer.colors.YELLOW if report.has_findings() else typer.colors.GREEN)
+        )
+        typer.secho(report.summary_line(), fg=colour, err=True)
+        if security_report is not None:
+            security_report.write_text(report.to_markdown(), encoding="utf-8")
+            typer.secho(f"Security report -> {security_report}", fg=colour, err=True)
 
 
 @app.command()
