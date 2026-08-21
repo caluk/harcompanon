@@ -8,9 +8,13 @@ that touches model output does so only as mechanical *post-processing*.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Annotated
+
 import typer
 
 from harcompanon import __version__
+from harcompanon.preprocess import preprocess_file
 
 app = typer.Typer(
     add_completion=False,
@@ -36,9 +40,33 @@ def version() -> None:
 
 
 @app.command()
-def preprocess() -> None:
-    """Strip a HAR down to JSON API calls (mechanical noise removal only)."""
-    _not_implemented("preprocess", "harcompanon-4dj8")
+def preprocess(
+    har: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Path to the HAR file to preprocess.",
+        ),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Write the cleaned JSON here (default: stdout)."),
+    ] = None,
+) -> None:
+    """Strip a HAR down to its JSON API calls (mechanical noise removal only)."""
+    artifact = preprocess_file(har)
+    payload = artifact.to_canonical_json()
+    if output is None:
+        typer.echo(payload, nl=False)
+        return
+    output.write_text(payload, encoding="utf-8")
+    typer.secho(
+        f"Kept {artifact.kept_entries}/{artifact.total_entries} calls -> {output}",
+        fg=typer.colors.GREEN,
+        err=True,
+    )
 
 
 @app.command()
