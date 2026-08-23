@@ -16,35 +16,60 @@ SAMPLE = Path(__file__).parents[1] / "data" / "sample.har"
 runner = CliRunner()
 
 
-def test_keeps_only_json_api_calls() -> None:
+def test_keeps_every_call_envelope() -> None:
     artifact = preprocess_file(SAMPLE)
-    # 6 entries in, only the two JSON API calls kept (users GET, login POST).
+    # Every entry survives as an envelope now (not just JSON calls).
     assert artifact.total_entries == 6
-    assert artifact.kept_entries == 2
-    assert artifact.dropped_entries == 4
-    urls = [call.url for call in artifact.calls]
+    assert len(artifact.calls) == 6
+    # Two carry JSON bodies (the users GET and the login POST).
+    assert artifact.json_body_count == 2
+    urls = [c.url for c in artifact.calls]
     assert urls == [
         "https://api.example.com/v1/users",
+        "https://cdn.example.com/logo.png",
+        "https://cdn.example.com/font.woff2",
+        "https://app.example.com/static/main.abc123.js",
         "https://api.example.com/v1/login",
+        "https://api.example.com/health",
     ]
 
 
-def test_bodies_are_parsed_faithfully() -> None:
-    artifact = preprocess_file(SAMPLE)
-    users, login = artifact.calls
+def test_json_bodies_kept_faithfully_non_json_stripped() -> None:
+    calls = {c.url: c for c in preprocess_file(SAMPLE).calls}
+    users = calls["https://api.example.com/v1/users"]
     assert isinstance(users.response_body, dict)
     assert users.response_body["total"] == 1
-    assert login.request_body == {"email": "ada@example.com", "password": "redacted"}
-    assert isinstance(login.response_body, dict)
-    assert login.response_body["token"] == "abc.def.ghi"
-    assert login.time_ms == 88.0
+    assert users.response_bytes == 51
+    # Non-JSON bodies are stripped, but the envelope (status/content-type) remains.
+    image = calls["https://cdn.example.com/logo.png"]
+    assert image.response_body is None
+    assert image.status == 200
+    assert image.response_content_type == "image/png"
+    health = calls["https://api.example.com/health"]
+    assert health.response_body is None  # text/plain is not JSON
 
 
-def test_image_font_js_and_plaintext_are_dropped() -> None:
-    artifact = preprocess_file(SAMPLE)
-    urls = "\n".join(call.url for call in artifact.calls)
-    for noise in ("logo.png", "font.woff2", "main.abc123.js", "/health"):
-        assert noise not in urls
+def test_curated_headers_kept_and_content_type_excluded() -> None:
+    users = {c.url: c for c in preprocess_file(SAMPLE).calls}["https://api.example.com/v1/users"]
+    assert users.response_headers["content-security-policy"] == "default-src 'self'"
+    assert users.response_headers["cache-control"] == "no-cache, private"
+    # content-type has its own field; it is not duplicated into the headers dict.
+    assert "content-type" not in users.response_headers
+
+
+def test_sensitive_header_values_are_redacted() -> None:
+    login = {c.url: c for c in preprocess_file(SAMPLE).calls}["https://api.example.com/v1/login"]
+    # Presence kept, value gone — no token/cookie leaks into the cleaned artifact.
+    assert login.request_headers["authorization"] == "<redacted>"
+    assert login.response_headers["set-cookie"] == "<redacted>"
+    dumped = login.model_dump_json()
+    assert "super-secret-token" not in dumped
+    assert "deadbeef" not in dumped
+    # A non-sensitive header on the same response keeps its value.
+    assert login.response_headers["content-security-policy"] == "default-src 'self'"
+    # The request body is evidence and stays faithful.
+    assert isinstance(login.request_body, dict)
+    assert login.request_body["email"] == "ada@example.com"
 
 
 def test_output_is_byte_stable_and_idempotent() -> None:
@@ -63,17 +88,19 @@ def test_noise_rules_json_detection() -> None:
     assert not rules.is_json_content_type(None)
 
 
-def test_url_exclusion_rule_drops_matching_calls() -> None:
-    # Excluding "login" should drop the POST and leave only the users call.
-    artifact = preprocess_file(SAMPLE, NoiseRules(exclude_url_substrings=("login",)))
-    urls = [call.url for call in artifact.calls]
-    assert urls == ["https://api.example.com/v1/users"]
+def test_url_exclusion_rule_drops_matching_entries() -> None:
+    artifact = preprocess_file(SAMPLE, NoiseRules(exclude_url_substrings=("cdn.example.com",)))
+    urls = [c.url for c in artifact.calls]
+    assert all("cdn.example.com" not in u for u in urls)
+    assert "https://api.example.com/v1/users" in urls
 
 
 def test_cli_preprocess_emits_json(tmp_path: Path) -> None:
     out = tmp_path / "cleaned.json"
-    result = runner.invoke(app, ["preprocess", str(SAMPLE), "--output", str(out)])
+    result = runner.invoke(
+        app, ["preprocess", str(SAMPLE), "--output", str(out), "--no-security-scan"]
+    )
     assert result.exit_code == 0
     text = out.read_text(encoding="utf-8")
-    assert '"kept_entries": 2' in text
+    assert '"json_body_count": 2' in text
     assert "abc.def.ghi" in text
