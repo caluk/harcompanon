@@ -1,8 +1,12 @@
 """Core typed data models.
 
-For now this holds the *cleaned artifact* that preprocessing produces — the faithful,
-noise-stripped view of a HAR that later stages feed to the models. More core types (runs,
-responses, findings, the RST ladder) will land alongside their own tasks.
+For now this holds the *cleaned artifact* that preprocessing produces — a faithful,
+noise-stripped view of a HAR. The philosophy is "keep the whole request/response
+*envelope*, strip only the heavy/binary *bodies*": every call's method, URL, status,
+timing, content types, and a curated set of (mostly security-relevant) headers are kept, so
+the full API surface a tester scrutinises survives; only noise bodies (images, fonts, JS,
+base64) are dropped, while JSON bodies are kept. More core types (runs, responses, findings,
+the RST ladder) will land alongside their own tasks.
 """
 
 from __future__ import annotations
@@ -13,7 +17,7 @@ from pydantic import BaseModel, JsonValue
 
 
 class CleanedCall(BaseModel):
-    """One API call kept from a HAR: bodies, status, and timing — nothing interpreted."""
+    """One API call's envelope: metadata, curated headers, and JSON bodies only."""
 
     method: str
     url: str
@@ -21,19 +25,21 @@ class CleanedCall(BaseModel):
     started_at: str | None = None
     time_ms: float | None = None
     request_content_type: str | None = None
-    request_body: JsonValue | None = None
     response_content_type: str | None = None
+    request_headers: dict[str, str] = {}
+    response_headers: dict[str, str] = {}
+    request_body: JsonValue | None = None
     response_body: JsonValue | None = None
+    response_bytes: int | None = None
 
 
 class CleanedArtifact(BaseModel):
-    """The result of preprocessing a HAR: the kept calls plus honest keep/drop counts."""
+    """The result of preprocessing a HAR: every kept call's envelope plus honest counts."""
 
     source_har: str
     total_entries: int
-    kept_entries: int
-    dropped_entries: int
     calls: list[CleanedCall]
+    json_body_count: int
 
     def to_canonical_json(self) -> str:
         """Serialize deterministically and faithfully.

@@ -76,7 +76,8 @@ def preprocess(
     else:
         output.write_text(payload, encoding="utf-8")
         typer.secho(
-            f"Kept {artifact.kept_entries}/{artifact.total_entries} calls -> {output}",
+            f"Kept {len(artifact.calls)}/{artifact.total_entries} call envelopes "
+            f"({artifact.json_body_count} with JSON bodies) -> {output}",
             fg=typer.colors.GREEN,
             err=True,
         )
