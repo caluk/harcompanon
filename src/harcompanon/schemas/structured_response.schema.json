@@ -1,0 +1,16 @@
+{
+  "mode": "structured",
+  "version": "v1",
+  "format": "markdown",
+  "required_sections": [
+    "Findings",
+    "Questions only a human can answer",
+    "Self-critique"
+  ],
+  "finding_fields": [
+    "Observation",
+    "Oracle",
+    "Status"
+  ],
+  "notes": "Structural spec for the `structured` prompt's output. The structural check (harcompanon-fvt4) mechanically verifies that these section headings are present and that findings name Observation, Oracle, and Status. It is a presence/conformance check only — POST-PROCESSING, never a judgment of quality. The human is the sole judge."
+}
