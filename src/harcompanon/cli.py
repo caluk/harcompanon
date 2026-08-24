@@ -14,7 +14,11 @@ from typing import Annotated
 import typer
 
 from harcompanon import __version__
+from harcompanon.config import build_provider, load_credentials
+from harcompanon.execution import run_benchmark
 from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
+from harcompanon.prompts import available_modes
+from harcompanon.storage import store_run
 
 app = typer.Typer(
     add_completion=False,
@@ -98,9 +102,62 @@ def preprocess(
 
 
 @app.command()
-def run() -> None:
-    """Run one fixture across all providers x both prompts (stateless API calls)."""
-    _not_implemented("run", "harcompanon-zdym")
+def run(
+    fixture: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, readable=True, help="HAR fixture to run."),
+    ],
+    providers: Annotated[
+        list[str] | None,
+        typer.Option("--provider", "-p", help="Provider name (repeatable). Default: anthropic."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", help="Override the model id for all providers."),
+    ] = None,
+    modes: Annotated[
+        str,
+        typer.Option("--modes", help="Comma-separated prompt modes."),
+    ] = "minimal,briefed,structured",
+    out: Annotated[
+        Path,
+        typer.Option("--out", "-o", help="Directory to write the run into."),
+    ] = Path("runs"),
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run/--live", help="Render prompts without calling any API."),
+    ] = False,
+) -> None:
+    """Run one fixture across the chosen providers x prompt modes (stateless API calls)."""
+    mode_list = [m.strip() for m in modes.split(",") if m.strip()]
+    known = set(available_modes())
+    unknown = [m for m in mode_list if m not in known]
+    if unknown:
+        typer.secho(
+            f"Unknown mode(s): {', '.join(unknown)}. Available: {', '.join(sorted(known))}.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    provider_names = providers or ["anthropic"]
+    if not dry_run:
+        load_credentials()
+    built = [build_provider(name, model) for name in provider_names]
+
+    result = run_benchmark(fixture, built, mode_list, dry_run=dry_run)
+    run_dir = store_run(result, out)
+
+    errors = sum(1 for r in result.responses if r.error)
+    total_cost = sum(r.response.cost_usd or 0.0 for r in result.responses)
+    typer.secho(
+        f"{'[dry-run] ' if dry_run else ''}{len(result.responses)} responses "
+        f"({errors} error(s)) -> {run_dir}",
+        fg=typer.colors.RED if errors else typer.colors.GREEN,
+        err=True,
+    )
+    if not dry_run and total_cost:
+        typer.secho(f"Total cost: ${total_cost:.4f}", fg=typer.colors.GREEN, err=True)
 
 
 @app.command()
