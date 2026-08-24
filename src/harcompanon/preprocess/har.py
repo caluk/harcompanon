@@ -31,28 +31,43 @@ def _mime(container: dict[str, Any]) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def _json_body(text: Any, is_json: bool, encoding: Any = None) -> JsonValue | None:
-    """Keep a body only if it is JSON; parse it. Everything else (incl. base64) is dropped."""
-    if not is_json or not isinstance(text, str) or text == "":
-        return None
-    if isinstance(encoding, str) and encoding.lower() == "base64":
-        return None
-    try:
-        return cast(JsonValue, json.loads(text))
-    except json.JSONDecodeError:
-        return None
+def _human_size(num_bytes: int) -> str:
+    if num_bytes < 1024:
+        return f"{num_bytes} B"
+    if num_bytes < 1024 * 1024:
+        return f"{num_bytes / 1024:.0f} KB"
+    return f"{num_bytes / (1024 * 1024):.1f} MB"
 
 
-def _response_bytes(content: dict[str, Any]) -> int | None:
-    """Best-effort size of the response body, even when the body itself is stripped."""
-    size = content.get("size")
-    if isinstance(size, int) and size >= 0:
-        return size
-    text = content.get("text")
-    encoding = content.get("encoding")
-    if isinstance(text, str) and not (isinstance(encoding, str) and encoding.lower() == "base64"):
-        return len(text.encode("utf-8"))
-    return None
+def _body(
+    text: Any,
+    is_json: bool,
+    content_type: str | None,
+    size: Any,
+    encoding: Any,
+) -> JsonValue | None:
+    """Parse JSON bodies faithfully; represent every other *present* body as an explicit
+    ``<stripped: type, size>`` marker.
+
+    A bare ``null`` for a non-JSON body reads to a model as "missing / mock data" — the
+    marker says "a body was here and we deliberately dropped it", which is the truth.
+    """
+    if not isinstance(text, str) or text == "":
+        return None
+    is_base64 = isinstance(encoding, str) and encoding.lower() == "base64"
+    if is_json and not is_base64:
+        try:
+            return cast(JsonValue, json.loads(text))
+        except json.JSONDecodeError:
+            pass  # present but unparseable — mark it stripped rather than dropping silently
+    if isinstance(size, int) and size > 0:
+        num_bytes: int | None = size
+    elif is_base64:
+        num_bytes = None  # a base64 string's length isn't the real byte size
+    else:
+        num_bytes = len(text.encode("utf-8"))
+    suffix = f", {_human_size(num_bytes)}" if num_bytes else ""
+    return f"<stripped: {content_type or 'body'}{suffix}>"
 
 
 def _extract_call(entry: dict[str, Any], rules: NoiseRules) -> CleanedCall | None:
@@ -84,13 +99,20 @@ def _extract_call(entry: dict[str, Any], rules: NoiseRules) -> CleanedCall | Non
         response_content_type=response_ct,
         request_headers=rules.select_headers(request.get("headers")),
         response_headers=rules.select_headers(response.get("headers")),
-        request_body=_json_body(post.get("text"), rules.is_json_content_type(request_ct)),
-        response_body=_json_body(
+        request_body=_body(
+            post.get("text"),
+            rules.is_json_content_type(request_ct),
+            request_ct,
+            post.get("size"),
+            None,
+        ),
+        response_body=_body(
             content.get("text"),
             rules.is_json_content_type(response_ct),
-            encoding=content.get("encoding"),
+            response_ct,
+            content.get("size"),
+            content.get("encoding"),
         ),
-        response_bytes=_response_bytes(content),
     )
 
 
@@ -116,7 +138,11 @@ def preprocess_har(
         if call is not None:
             calls.append(call)
 
-    json_bodies = sum(1 for c in calls if c.response_body is not None or c.request_body is not None)
+    json_bodies = sum(
+        1
+        for c in calls
+        if isinstance(c.response_body, dict | list) or isinstance(c.request_body, dict | list)
+    )
     return CleanedArtifact(
         source_har=source_har,
         total_entries=total,
