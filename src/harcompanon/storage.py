@@ -25,8 +25,17 @@ def store_run(run: RunResult, out_dir: Path) -> Path:
             json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
 
+    (run_dir / "run.json").write_text(run.model_dump_json(indent=2) + "\n", encoding="utf-8")
     (run_dir / "index.md").write_text(_index_markdown(run), encoding="utf-8")
     return run_dir
+
+
+def load_run(run_dir: Path) -> RunResult:
+    """Load a stored run back into a RunResult (from ``run.json``)."""
+    run_json = run_dir / "run.json"
+    if not run_json.is_file():
+        raise ValueError(f"{run_dir} is not a run directory (no run.json).")
+    return RunResult.model_validate_json(run_json.read_text(encoding="utf-8"))
 
 
 def _fmt_cost(value: float | None) -> str:

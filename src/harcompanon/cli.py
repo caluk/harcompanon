@@ -14,11 +14,13 @@ from typing import Annotated
 import typer
 
 from harcompanon import __version__
+from harcompanon.closeout import generate_closeout
 from harcompanon.config import build_provider, load_credentials
 from harcompanon.execution import run_benchmark
+from harcompanon.judgment import generate_judgment
 from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
 from harcompanon.prompts import available_modes
-from harcompanon.storage import store_run
+from harcompanon.storage import load_run, store_run
 
 app = typer.Typer(
     add_completion=False,
@@ -167,15 +169,45 @@ def check() -> None:
 
 
 @app.command()
-def judge() -> None:
-    """Generate the low-friction human-judgment file for a run (the human fills it in)."""
-    _not_implemented("judge", "harcompanon-kx8f")
+def judge(
+    run_dir: Annotated[
+        Path,
+        typer.Argument(exists=True, file_okay=False, help="A run directory (contains run.json)."),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output", "-o", help="Write the judgment YAML here (default: <run>/judgment.yml)."
+        ),
+    ] = None,
+) -> None:
+    """Generate the human-judgment file for a run (you fill it in; you are the judge)."""
+    run = load_run(run_dir)
+    dest = output or (run_dir / "judgment.yml")
+    dest.write_text(generate_judgment(run), encoding="utf-8")
+    typer.secho(
+        f"Judgment form -> {dest} (you are the sole judge)", fg=typer.colors.GREEN, err=True
+    )
 
 
 @app.command()
-def closeout() -> None:
+def closeout(
+    run_dir: Annotated[
+        Path,
+        typer.Argument(exists=True, file_okay=False, help="A run directory (contains run.json)."),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output", "-o", help="Write the close-out here (default: <run>/closeout.md)."
+        ),
+    ] = None,
+) -> None:
     """Generate a session close-out scaffold from the five debrief questions."""
-    _not_implemented("closeout", "harcompanon-s053")
+    run = load_run(run_dir)
+    dest = output or (run_dir / "closeout.md")
+    dest.write_text(generate_closeout(run), encoding="utf-8")
+    typer.secho(f"Close-out scaffold -> {dest}", fg=typer.colors.GREEN, err=True)
 
 
 if __name__ == "__main__":
