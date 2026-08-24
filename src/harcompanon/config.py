@@ -11,17 +11,22 @@ from collections.abc import Callable
 
 from dotenv import load_dotenv
 
-from harcompanon.providers import AnthropicProvider, Provider
+from harcompanon.providers import AnthropicProvider, GeminiProvider, OpenAIProvider, Provider
 from harcompanon.providers.anthropic import DEFAULT_MAX_TOKENS
 
 #: name -> factory(model, max_tokens) -> Provider.
 _REGISTRY: dict[str, Callable[[str, int], Provider]] = {
     "anthropic": AnthropicProvider,
+    "openai": OpenAIProvider,
+    "gemini": GeminiProvider,
 }
 
 #: name -> default model id used when the caller doesn't override it.
+#: These are sensible current defaults; verify/override per your account with --model.
 DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-opus-4-8",
+    "openai": "gpt-5",
+    "gemini": "gemini-2.5-pro",
 }
 
 
