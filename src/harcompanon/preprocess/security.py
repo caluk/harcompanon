@@ -79,6 +79,11 @@ _CREDENTIAL_FIELD = re.compile(
 _HIGH_CREDENTIAL_FIELDS = {"password", "passwd", "pwd", "secret", "client_secret"}
 
 
+#: Placeholder written by `harcompanon redact` into the raw HAR; already-redacted, so the
+#: scanner ignores it (a redacted file should scan clean).
+REDACTED_MARKER = "<REDACTED>"
+
+
 def mask(value: str) -> str:
     """Mask a candidate secret so the report never carries the full value."""
     value = value.strip()
@@ -164,6 +169,8 @@ class SecurityScanner(BaseModel):
         per_category: dict[str, int] = {}
 
         def add(category: str, severity: Severity, where: str, location: str, sample: str) -> None:
+            if sample == REDACTED_MARKER:
+                return  # already redacted — not a secret
             masked = mask(sample)
             key = (category, where, masked)
             existing = collected.get(key)
@@ -252,3 +259,53 @@ def _body_text(container: dict[str, Any]) -> str | None:
         if isinstance(content_text, str):
             return content_text
     return None
+
+
+def collect_secrets(raw: dict[str, Any]) -> list[str]:
+    """Return the raw (unmasked) secret VALUES the scanner detects — for redaction.
+
+    Longest-first, so literally replacing one value never leaves a fragment of another.
+    """
+    log = raw.get("log")
+    entries = log.get("entries") if isinstance(log, dict) else None
+    entries = entries if isinstance(entries, list) else []
+
+    values: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        req_obj = entry.get("request")
+        request: dict[str, Any] = req_obj if isinstance(req_obj, dict) else {}
+        resp_obj = entry.get("response")
+        response: dict[str, Any] = resp_obj if isinstance(resp_obj, dict) else {}
+
+        for container in (request, response):
+            headers = container.get("headers")
+            if not isinstance(headers, list):
+                continue
+            for header in headers:
+                if not isinstance(header, dict):
+                    continue
+                name = str(header.get("name", "")).lower().lstrip(":")
+                value = str(header.get("value", ""))
+                if name in SENSITIVE_HEADERS and value:
+                    values.add(value)
+
+        query = str(request.get("url", "")).split("?", 1)
+        if len(query) == 2:
+            for pair in query[1].split("&"):
+                key, sep, value = pair.partition("=")
+                if sep and key.lower() in SENSITIVE_QUERY_KEYS and value:
+                    values.add(value)
+
+        for container in (request, response):
+            body = _body_text(container)
+            if not body:
+                continue
+            for _category, _severity, pattern in _PATTERNS:
+                for match in pattern.finditer(body):
+                    values.add(match.group(0))
+            for match in _CREDENTIAL_FIELD.finditer(body):
+                values.add(match.group(2))
+
+    return sorted((v for v in values if v), key=len, reverse=True)
