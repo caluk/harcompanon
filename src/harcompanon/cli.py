@@ -20,6 +20,7 @@ from harcompanon.execution import run_benchmark
 from harcompanon.judgment import generate_judgment
 from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
 from harcompanon.prompts import available_modes
+from harcompanon.redact import redact_file
 from harcompanon.storage import load_run, store_run
 from harcompanon.structural_check import check_run, report_markdown
 
@@ -92,6 +93,41 @@ def preprocess(
         if security_report is not None:
             security_report.write_text(report.to_markdown(), encoding="utf-8")
             typer.secho(f"Security report -> {security_report}", fg=colour, err=True)
+
+
+@app.command()
+def redact(
+    har: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, readable=True, help="HAR file to redact."),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Write here (default: <name>.redacted.har)."),
+    ] = None,
+) -> None:
+    """Mask scanner-detected secrets in a HAR, producing a safe-to-commit-and-send copy."""
+    dest = output or har.with_name(f"{har.stem}.redacted.har")
+    removed, remaining = redact_file(har, dest)
+    typer.secho(
+        f"Redacted {removed} secret value occurrence(s) -> {dest}",
+        fg=typer.colors.GREEN,
+        err=True,
+    )
+    if remaining == 0:
+        typer.secho(
+            "Verified: no detected secret value remains "
+            "(sensitive header/field NAMES stay; only values are removed).",
+            fg=typer.colors.GREEN,
+            err=True,
+        )
+    else:
+        typer.secho(
+            f"WARNING: {remaining} secret occurrence(s) still present — review manually.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
 
 
 @app.command()
