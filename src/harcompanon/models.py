@@ -30,7 +30,6 @@ class CleanedCall(BaseModel):
     response_headers: dict[str, str] = {}
     request_body: JsonValue | None = None
     response_body: JsonValue | None = None
-    response_bytes: int | None = None
 
 
 class CleanedArtifact(BaseModel):

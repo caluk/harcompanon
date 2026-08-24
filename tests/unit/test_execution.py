@@ -45,6 +45,13 @@ def test_fake_provider_satisfies_protocol() -> None:
     assert isinstance(FakeProvider(), Provider)
 
 
+def test_run_id_is_readable_with_fixture_and_model() -> None:
+    result = run_benchmark(SAMPLE, [FakeProvider()], ["minimal"])
+    # e.g. "sample_fake-1_2026-08-24_12-53-24" — fixture, model slug, CET time.
+    assert result.run_id.startswith("sample_fake-1_")
+    assert "T" not in result.run_id  # readable date, not an ISO/compact integer stamp
+
+
 def test_run_calls_each_provider_and_mode() -> None:
     result = run_benchmark(SAMPLE, [FakeProvider()], ["minimal", "structured"])
     assert len(result.responses) == 2
