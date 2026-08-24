@@ -23,7 +23,8 @@ DRY_RUN_TEXT = "[dry-run — prompt rendered, no API call made]"
 
 #: Run timestamps are stamped in Central European Time for human readability.
 _TZ = ZoneInfo("Europe/Berlin")
-_VENDOR_PREFIXES = ("claude-", "gpt-", "gemini-", "models/")
+# Only strip the verbose Anthropic prefix; gpt-5 / gemini-2.5-pro stay readable as-is.
+_VENDOR_PREFIXES = ("claude-", "models/")
 
 
 def _slugify(value: str) -> str:
