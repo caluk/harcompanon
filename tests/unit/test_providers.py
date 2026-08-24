@@ -5,7 +5,14 @@ from __future__ import annotations
 import pytest
 
 from harcompanon.config import available_providers, build_provider
-from harcompanon.providers import AnthropicProvider, Provider, RawResponse, estimate_cost
+from harcompanon.providers import (
+    AnthropicProvider,
+    GeminiProvider,
+    OpenAIProvider,
+    Provider,
+    RawResponse,
+    estimate_cost,
+)
 
 
 def test_estimate_cost_known_and_unknown() -> None:
@@ -26,6 +33,19 @@ def test_registry_builds_anthropic_with_default_model() -> None:
     assert isinstance(provider, AnthropicProvider)
     assert provider.model == "claude-opus-4-8"
     assert build_provider("anthropic", model="claude-haiku-4-5").model == "claude-haiku-4-5"
+
+
+def test_registry_has_all_three_providers() -> None:
+    assert set(available_providers()) >= {"anthropic", "openai", "gemini"}
+    openai = build_provider("openai")
+    gemini = build_provider("gemini")
+    assert isinstance(openai, OpenAIProvider)
+    assert openai.model == "gpt-5"
+    assert isinstance(gemini, GeminiProvider)
+    assert gemini.model == "gemini-2.5-pro"
+    # Both satisfy the runtime_checkable protocol without importing their SDKs.
+    assert isinstance(openai, Provider)
+    assert isinstance(gemini, Provider)
 
 
 def test_unknown_provider_raises() -> None:
