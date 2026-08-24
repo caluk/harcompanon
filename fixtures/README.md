@@ -48,6 +48,15 @@ evidence.
 
 ## Provenance
 
-When you add a fixture, record where it came from (one line per fixture):
+One line per fixture — where it came from.
 
-<!-- - `acme-checkout-session.har` — captured 2026-08-21, ACME staging checkout flow, test account, tokens redacted. -->
+- `dash.har` — captured 2026-06-18 from the **public OrangeHRM demo**
+  (`opensource-demo.orangehrmlive.com`), admin session, Dashboard page load. Throwaway demo
+  data. Security scan: 0 high / 0 medium (1 low = a vendor support email baked into
+  OrangeHRM's own public `app.js`). ~4 MB. The primary fixture — 7 distinct dashboard
+  endpoints (time-at-work, action-summary, shortcuts, Buzz feed, leaves, subunit, locations).
+- `perf.har` — same session/source, navigated to the Performance module. Secondary fixture;
+  note the `workweek` and `holidays` calls each fire twice (a curious quirk to scrutinise).
+
+Both are safe to commit: public demo, no real user data. If you add a fixture from a real
+system, redact it first (see the warning above).
