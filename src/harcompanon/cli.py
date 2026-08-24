@@ -21,22 +21,13 @@ from harcompanon.judgment import generate_judgment
 from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
 from harcompanon.prompts import available_modes
 from harcompanon.storage import load_run, store_run
+from harcompanon.structural_check import check_run, report_markdown
 
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
     help="Compare LLMs as RST testing companions on the same frozen evidence and prompt.",
 )
-
-
-def _not_implemented(verb: str, bean: str) -> None:
-    """Report an unbuilt verb honestly and exit non-zero (tracked by a Beans task)."""
-    typer.secho(
-        f"`{verb}` is not implemented yet (tracked by {bean}).",
-        fg=typer.colors.YELLOW,
-        err=True,
-    )
-    raise typer.Exit(code=2)
 
 
 @app.command()
@@ -163,9 +154,30 @@ def run(
 
 
 @app.command()
-def check() -> None:
-    """Post-processing: structural conformance check of structured responses (never a verdict)."""
-    _not_implemented("check", "harcompanon-fvt4")
+def check(
+    run_dir: Annotated[
+        Path,
+        typer.Argument(exists=True, file_okay=False, help="A run directory (contains run.json)."),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output", "-o", help="Write the checklist here (default: <run>/structural_check.md)."
+        ),
+    ] = None,
+) -> None:
+    """Post-processing: structural conformance check of structured responses (not a verdict)."""
+    run = load_run(run_dir)
+    dest = output or (run_dir / "structural_check.md")
+    dest.write_text(report_markdown(run), encoding="utf-8")
+    checked = check_run(run)
+    conforming = sum(1 for _, report in checked if report.conforms())
+    typer.secho(
+        f"Structural check: {conforming}/{len(checked)} structured responses conform "
+        f"(mechanical presence check, not a verdict) -> {dest}",
+        fg=typer.colors.GREEN,
+        err=True,
+    )
 
 
 @app.command()
