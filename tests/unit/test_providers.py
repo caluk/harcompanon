@@ -15,6 +15,11 @@ def test_estimate_cost_known_and_unknown() -> None:
     assert estimate_cost("some-unpriced-model", 100, 100) is None
 
 
+def test_estimate_cost_normalizes_dated_model_id() -> None:
+    # The API can return a dated snapshot; pricing is keyed on the alias.
+    assert estimate_cost("claude-haiku-4-5-20251001", 1_000_000, 1_000_000) == pytest.approx(6.0)
+
+
 def test_registry_builds_anthropic_with_default_model() -> None:
     assert "anthropic" in available_providers()
     provider = build_provider("anthropic")

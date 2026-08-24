@@ -39,14 +39,19 @@ def test_json_bodies_kept_faithfully_non_json_stripped() -> None:
     users = calls["https://api.example.com/v1/users"]
     assert isinstance(users.response_body, dict)
     assert users.response_body["total"] == 1
-    assert users.response_bytes == 51
-    # Non-JSON bodies are stripped, but the envelope (status/content-type) remains.
+    # Non-JSON bodies become an explicit "<stripped: ...>" marker (never a bare null),
+    # while the envelope (status / content-type) remains.
     image = calls["https://cdn.example.com/logo.png"]
-    assert image.response_body is None
+    assert isinstance(image.response_body, str)
+    assert image.response_body.startswith("<stripped: image/png")
     assert image.status == 200
     assert image.response_content_type == "image/png"
     health = calls["https://api.example.com/health"]
-    assert health.response_body is None  # text/plain is not JSON
+    assert isinstance(health.response_body, str)
+    assert health.response_body.startswith("<stripped: text/plain")
+    # The marker carries a human-readable size for non-base64 bodies.
+    js = calls["https://app.example.com/static/main.abc123.js"]
+    assert js.response_body == "<stripped: application/javascript, 16 B>"
 
 
 def test_curated_headers_kept_and_content_type_excluded() -> None:

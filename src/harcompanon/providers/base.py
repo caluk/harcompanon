@@ -8,9 +8,13 @@ stateless and single-shot, so reruns are comparable months apart.
 
 from __future__ import annotations
 
+import re
 from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
+
+#: Trailing dated-snapshot suffix on a model id, e.g. "-20251001".
+_DATE_SUFFIX = re.compile(r"-\d{8}$")
 
 #: Per-model price in USD per 1M tokens: (input, output). Prices drift — revisit periodically.
 PRICING: dict[str, tuple[float, float]] = {
@@ -22,8 +26,12 @@ PRICING: dict[str, tuple[float, float]] = {
 
 
 def estimate_cost(model: str, input_tokens: int | None, output_tokens: int | None) -> float | None:
-    """USD cost from token usage, or None if the model's price isn't known."""
-    price = PRICING.get(model)
+    """USD cost from token usage, or None if the model's price isn't known.
+
+    The API may return a dated snapshot id (``claude-haiku-4-5-20251001``); the pricing table
+    is keyed on the alias, so strip the date suffix before the lookup.
+    """
+    price = PRICING.get(_DATE_SUFFIX.sub("", model))
     if price is None or input_tokens is None or output_tokens is None:
         return None
     return input_tokens / 1_000_000 * price[0] + output_tokens / 1_000_000 * price[1]
