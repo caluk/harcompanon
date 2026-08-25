@@ -1,15 +1,18 @@
 """Pseudonymize domain PII in a HAR — replace it with consistent, format-preserving synthetic data.
 
 Distinct from ``redact`` (which masks *secrets* to ``<REDACTED>``). Pseudonymization keeps the
-evidence **usable**: a real VIN becomes a fake VIN (17 chars), a UUID stays UUID-shaped, an IMEI
-stays 15 digits — and the **same** real value always maps to the **same** synthetic one, so a
-companion can still reason about structure and cross-references ("the same vehicle appears in N
-calls", "a UUID in every URL path — is it guessable?"). Only the real identifiers change.
+evidence **usable**: a real VIN becomes a fake VIN (17 chars, real WMI prefix kept), a UUID stays
+UUID-shaped, an IMEI stays 15 digits — and the **same** real value always maps to the **same**
+synthetic one, so a companion can still reason about structure and cross-references ("the same
+vehicle appears in N calls", "a UUID in every URL path — is it guessable?"). Only the real
+identifiers change; **numbers are left untouched** (scrambling an odometer would destroy the real
+monotonic history and manufacture a false "impossible mileage" finding).
 
 Two passes:
-- **key-based** — values of configured PII keys inside JSON bodies (``vin``, ``licensePlate``,
-  ``deviceId``, ``mobileNo``, ``address``, ``mileage`` …) are replaced.
-- **pattern-based** — UUIDs, VINs and IMEIs are replaced wherever they appear (URL paths, bodies).
+- **key-based** — *string* values of configured PII keys inside JSON bodies (``vin``,
+  ``licensePlate``, ``deviceId``, ``mobileNo``, ``address``, ``city`` …) are replaced.
+- **pattern-based** — UUIDs and (letter-bearing) VINs are replaced wherever they appear (URL
+  paths, ``_initiator.url``, the ``:path`` header, bodies).
 
 Heuristic, like ``redact``: it can't *guarantee* it caught every PII field in an arbitrary API —
 review the change report before sending or publishing.
@@ -126,7 +129,9 @@ class Pseudonymizer:
         if category == "uuid":
             synth = self._fake_uuid(real)
         elif category == "vin":
-            synth = self._seeded("vin", real, _VIN_ALPHABET, 17)
+            # Keep the 3-char WMI (manufacturer/region — "it's a Lexus", not individual-identifying)
+            # and scramble only the vehicle-specific remainder. A slight, plausibly-real change.
+            synth = real[:3] + self._seeded("vin", real, _VIN_ALPHABET, max(len(real) - 3, 0))
         elif category == "imei":
             synth = self._seeded("imei", real, "0123456789", 15)
         else:
@@ -135,15 +140,6 @@ class Pseudonymizer:
         self._synth_values.add(synth)
         self.counts[category] += 1
         return synth
-
-    def _synth_number(self, value: int | float) -> int | float:
-        key = f"num:{value!r}"
-        length = len(str(abs(int(value)))) or 1
-        synth_int = int(self._seeded("num", repr(value), "0123456789", length))
-        if key not in self._map:
-            self._map[key] = str(synth_int)
-            self.counts["number"] += 1
-        return float(synth_int) if isinstance(value, float) else synth_int
 
     def _classify(self, value: str) -> str:
         if _UUID.fullmatch(value):
@@ -168,12 +164,11 @@ class Pseudonymizer:
         if isinstance(obj, dict):
             result: dict[str, Any] = {}
             for key, value in obj.items():
-                is_pii = key.lower() in self.pii_keys
-                if is_pii and isinstance(value, str) and value:
+                if key.lower() in self.pii_keys and isinstance(value, str) and value:
                     result[key] = self._synth(value, self._classify(value))
-                elif is_pii and isinstance(value, int | float) and not isinstance(value, bool):
-                    result[key] = self._synth_number(value)
                 else:
+                    # Numbers (odometer/mileage, coordinates) are left as-is: scrambling them
+                    # destroys real structure (e.g. monotonic mileage) and manufactures findings.
                     result[key] = self._walk(value)
             return result
         if isinstance(obj, list):
