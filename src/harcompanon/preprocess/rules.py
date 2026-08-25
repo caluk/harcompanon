@@ -59,6 +59,9 @@ class NoiseRules(BaseModel):
     kept_headers: frozenset[str] = DEFAULT_KEPT_HEADERS
     #: Retained headers whose values must be redacted (kept as presence only).
     redact_header_values: frozenset[str] = DEFAULT_REDACT_HEADERS
+    #: A single body longer than this (raw chars) is stripped to a marker. A few giant JSON
+    #: blobs (map tiles, grib data) can otherwise blow past the model's context window.
+    max_body_chars: int = 20000
 
     def is_json_content_type(self, content_type: str | None) -> bool:
         if not content_type:
