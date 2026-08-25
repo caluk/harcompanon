@@ -82,6 +82,12 @@ _VIN = re.compile(r"\b(?=[A-HJ-NPR-Z0-9]*[A-HJ-NPR-Z])[A-HJ-NPR-Z0-9]{17}\b")
 _IMEI = re.compile(r"\b\d{15}\b")
 _VIN_ALPHABET = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789"  # standard VIN excludes I, O, Q
 
+#: City keys map to one fixed, real-looking city rather than a format-preserving scramble —
+#: a plausible name ("Berlin") reads as real data instead of the gibberish ("Bhtilv") that tips a
+#: companion off that the capture was anonymized. All real cities collapse to the same value.
+CITY_KEYS: frozenset[str] = frozenset({"city"})
+CITY_REPLACEMENT = "Berlin"
+
 
 class Pseudonymizer:
     """Builds a consistent real→synthetic mapping and applies it (format-preserving)."""
@@ -126,7 +132,9 @@ class Pseudonymizer:
             return self._map[real]
         if real in self._synth_values:
             return real  # idempotent: a value we already produced is left as-is on re-passes
-        if category == "uuid":
+        if category == "city":
+            synth = CITY_REPLACEMENT
+        elif category == "uuid":
             synth = self._fake_uuid(real)
         elif category == "vin":
             # Keep the 3-char WMI (manufacturer/region — "it's a Lexus", not individual-identifying)
@@ -164,7 +172,10 @@ class Pseudonymizer:
         if isinstance(obj, dict):
             result: dict[str, Any] = {}
             for key, value in obj.items():
-                if key.lower() in self.pii_keys and isinstance(value, str) and value:
+                key_l = key.lower()
+                if key_l in CITY_KEYS and isinstance(value, str) and value:
+                    result[key] = self._synth(value, "city")
+                elif key_l in self.pii_keys and isinstance(value, str) and value:
                     result[key] = self._synth(value, self._classify(value))
                 else:
                     # Numbers (odometer/mileage, coordinates) are left as-is: scrambling them
