@@ -12,7 +12,7 @@ import time
 from harcompanon.providers.base import RawResponse, estimate_cost
 
 DEFAULT_MODEL = "claude-opus-4-8"
-DEFAULT_MAX_TOKENS = 8192
+DEFAULT_MAX_TOKENS = 16000
 
 
 class AnthropicProvider:
@@ -29,11 +29,14 @@ class AnthropicProvider:
 
         client = anthropic.Anthropic()
         started = time.monotonic()
-        message = client.messages.create(
+        # Stream, so a large max_tokens can't hit the SDK's non-streaming timeout guard and a
+        # long response is never cut short.
+        with client.messages.stream(
             model=self.model,
             max_tokens=self.max_tokens,
             messages=[{"role": "user", "content": prompt}],
-        )
+        ) as stream:
+            message = stream.get_final_message()
         latency_ms = (time.monotonic() - started) * 1000
 
         text = "".join(

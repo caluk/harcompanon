@@ -36,6 +36,13 @@ def test_registry_builds_anthropic_with_default_model() -> None:
     assert build_provider("anthropic", model="claude-haiku-4-5").model == "claude-haiku-4-5"
 
 
+def test_max_tokens_is_configurable_and_defaults_to_16000() -> None:
+    default = build_provider("anthropic")
+    custom = build_provider("anthropic", max_tokens=64000)
+    assert isinstance(default, AnthropicProvider) and default.max_tokens == 16000
+    assert isinstance(custom, AnthropicProvider) and custom.max_tokens == 64000
+
+
 def test_registry_has_all_three_providers() -> None:
     assert set(available_providers()) >= {"anthropic", "openai", "gemini"}
     openai = build_provider("openai")
