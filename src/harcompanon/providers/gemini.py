@@ -13,7 +13,7 @@ import time
 from harcompanon.providers.base import RawResponse, estimate_cost
 
 DEFAULT_MODEL = "gemini-2.5-pro"
-DEFAULT_MAX_TOKENS = 8192
+DEFAULT_MAX_TOKENS = 16000
 
 
 class GeminiProvider:

@@ -45,17 +45,21 @@ def _body(
     content_type: str | None,
     size: Any,
     encoding: Any,
+    max_body_chars: int,
 ) -> JsonValue | None:
-    """Parse JSON bodies faithfully; represent every other *present* body as an explicit
-    ``<stripped: type, size>`` marker.
+    """Parse JSON bodies faithfully; represent every other *present* body — and any oversized
+    one — as an explicit ``<stripped: type, size>`` marker.
 
     A bare ``null`` for a non-JSON body reads to a model as "missing / mock data" — the
-    marker says "a body was here and we deliberately dropped it", which is the truth.
+    marker says "a body was here and we deliberately dropped it", which is the truth. Bodies
+    over ``max_body_chars`` are stripped too (marked ``oversized``) so a few giant blobs can't
+    blow past the model's context window.
     """
     if not isinstance(text, str) or text == "":
         return None
     is_base64 = isinstance(encoding, str) and encoding.lower() == "base64"
-    if is_json and not is_base64:
+    oversized = len(text) > max_body_chars
+    if is_json and not is_base64 and not oversized:
         try:
             return cast(JsonValue, json.loads(text))
         except json.JSONDecodeError:
@@ -67,7 +71,8 @@ def _body(
     else:
         num_bytes = len(text.encode("utf-8"))
     suffix = f", {_human_size(num_bytes)}" if num_bytes else ""
-    return f"<stripped: {content_type or 'body'}{suffix}>"
+    tag = " (oversized)" if oversized else ""
+    return f"<stripped: {content_type or 'body'}{suffix}{tag}>"
 
 
 def _extract_call(entry: dict[str, Any], rules: NoiseRules) -> CleanedCall | None:
@@ -105,6 +110,7 @@ def _extract_call(entry: dict[str, Any], rules: NoiseRules) -> CleanedCall | Non
             request_ct,
             post.get("size"),
             None,
+            rules.max_body_chars,
         ),
         response_body=_body(
             content.get("text"),
@@ -112,6 +118,7 @@ def _extract_call(entry: dict[str, Any], rules: NoiseRules) -> CleanedCall | Non
             response_ct,
             content.get("size"),
             content.get("encoding"),
+            rules.max_body_chars,
         ),
     )
 
