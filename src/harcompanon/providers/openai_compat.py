@@ -12,7 +12,7 @@ import time
 
 from harcompanon.providers.base import RawResponse, estimate_cost
 
-DEFAULT_MAX_TOKENS = 8192
+DEFAULT_MAX_TOKENS = 16000
 
 
 class OpenAICompatProvider:

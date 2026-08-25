@@ -5,12 +5,13 @@ These are *checks* on our code — unrelated to "testing" in the RST sense.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from typer.testing import CliRunner
 
 from harcompanon.cli import app
-from harcompanon.preprocess import NoiseRules, preprocess_file
+from harcompanon.preprocess import NoiseRules, preprocess_file, preprocess_har
 
 SAMPLE = Path(__file__).parents[1] / "data" / "sample.har"
 runner = CliRunner()
@@ -52,6 +53,28 @@ def test_json_bodies_kept_faithfully_non_json_stripped() -> None:
     # The marker carries a human-readable size for non-base64 bodies.
     js = calls["https://app.example.com/static/main.abc123.js"]
     assert js.response_body == "<stripped: application/javascript, 16 B>"
+
+
+def test_oversized_json_body_is_stripped_but_small_one_kept() -> None:
+    big = json.dumps({"blob": "x" * 30000})
+    small = json.dumps({"ok": True})
+
+    def entry(path: str, text: str) -> dict[str, object]:
+        return {
+            "request": {"method": "GET", "url": f"https://api.example.com/{path}", "headers": []},
+            "response": {
+                "status": 200,
+                "headers": [],
+                "content": {"mimeType": "application/json", "text": text},
+            },
+        }
+
+    raw = {"log": {"entries": [entry("big", big), entry("small", small)]}}
+    calls = {c.url: c for c in preprocess_har(raw, NoiseRules(max_body_chars=20000)).calls}
+    big_call = calls["https://api.example.com/big"]
+    assert isinstance(big_call.response_body, str)
+    assert "oversized" in big_call.response_body  # a giant JSON blob is stripped to a marker
+    assert calls["https://api.example.com/small"].response_body == {"ok": True}  # small kept
 
 
 def test_curated_headers_kept_and_content_type_excluded() -> None:
