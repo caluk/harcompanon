@@ -67,6 +67,34 @@ def test_redacted_har_scans_clean(tmp_path: Path) -> None:
     assert not report.has_findings()
 
 
+def test_redact_masks_json_escaped_secret_values() -> None:
+    from harcompanon.redact import redact_text
+
+    # A cookie value with a double-quote is stored JSON-escaped in the file — a literal
+    # replace of the parsed value would miss it (the bug this guards against).
+    cookie = 'id="a"b; token=SECRETVALUE123'
+    raw = {
+        "log": {
+            "entries": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://x/",
+                        "headers": [{"name": "Cookie", "value": cookie}],
+                    },
+                    "response": {"status": 200, "headers": [], "content": {}},
+                }
+            ]
+        }
+    }
+    text = json.dumps(raw)
+    assert cookie not in text  # it is stored escaped; a naive replace would find nothing
+    redacted, removed = redact_text(text, json.loads(text))
+    assert removed > 0
+    assert "SECRETVALUE123" not in redacted
+    assert "<REDACTED>" in redacted
+
+
 def test_cli_redact(tmp_path: Path) -> None:
     out = tmp_path / "clean.har"
     result = runner.invoke(app, ["redact", str(SECRETS_HAR), "-o", str(out)])
