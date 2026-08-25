@@ -11,14 +11,42 @@ from collections.abc import Callable
 
 from dotenv import load_dotenv
 
-from harcompanon.providers import AnthropicProvider, GeminiProvider, OpenAIProvider, Provider
+from harcompanon.providers import (
+    AnthropicProvider,
+    GeminiProvider,
+    OpenAICompatProvider,
+    OpenAIProvider,
+    Provider,
+)
 from harcompanon.providers.anthropic import DEFAULT_MAX_TOKENS
+
+
+def _deepseek(model: str, max_tokens: int) -> Provider:
+    return OpenAICompatProvider(
+        "deepseek", "https://api.deepseek.com", "DEEPSEEK_API_KEY", model, max_tokens
+    )
+
+
+def _mistral(model: str, max_tokens: int) -> Provider:
+    return OpenAICompatProvider(
+        "mistral", "https://api.mistral.ai/v1", "MISTRAL_API_KEY", model, max_tokens
+    )
+
+
+def _kimi(model: str, max_tokens: int) -> Provider:
+    return OpenAICompatProvider(
+        "kimi", "https://api.moonshot.ai/v1", "MOONSHOT_API_KEY", model, max_tokens
+    )
+
 
 #: name -> factory(model, max_tokens) -> Provider.
 _REGISTRY: dict[str, Callable[[str, int], Provider]] = {
     "anthropic": AnthropicProvider,
     "openai": OpenAIProvider,
     "gemini": GeminiProvider,
+    "deepseek": _deepseek,
+    "mistral": _mistral,
+    "kimi": _kimi,
 }
 
 #: name -> default model id used when the caller doesn't override it.
@@ -27,6 +55,9 @@ DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-opus-4-8",
     "openai": "gpt-5",
     "gemini": "gemini-2.5-pro",
+    "deepseek": "deepseek-chat",
+    "mistral": "mistral-large-latest",
+    "kimi": "kimi-k2-0905-preview",
 }
 
 
