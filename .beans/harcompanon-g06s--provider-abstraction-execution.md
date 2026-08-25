@@ -1,11 +1,11 @@
 ---
 # harcompanon-g06s
 title: Provider abstraction & execution
-status: todo
+status: completed
 type: epic
 priority: high
 created_at: 2026-08-21T08:51:42Z
-updated_at: 2026-08-21T08:51:42Z
+updated_at: 2026-08-25T07:35:03Z
 parent: harcompanon-smx3
 ---
 
