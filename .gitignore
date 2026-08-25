@@ -226,3 +226,11 @@ __marimo__/
 /secrets.local.*
 # macOS Finder cruft
 .DS_Store
+
+# Local-only HAR captures. Real/personal captures live in fixtures/ for local dev but must
+# never be committed. Everything in fixtures/ is ignored by default (including .redacted.har
+# outputs); only the explicitly-allowed, safe fixtures below are tracked. To commit a new
+# safe fixture, add a matching "!" line here.
+/fixtures/*.har
+!/fixtures/dash.har
+!/fixtures/perf.har
