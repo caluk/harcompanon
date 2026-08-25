@@ -20,6 +20,7 @@ from harcompanon.execution import run_benchmark
 from harcompanon.judgment import generate_judgment
 from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
 from harcompanon.prompts import available_modes
+from harcompanon.providers.anthropic import DEFAULT_MAX_TOKENS
 from harcompanon.redact import redact_file
 from harcompanon.storage import load_run, store_run
 from harcompanon.structural_check import check_run, report_markdown
@@ -145,6 +146,10 @@ def run(
         str | None,
         typer.Option("--model", help="Override the model id for all providers."),
     ] = None,
+    max_tokens: Annotated[
+        int,
+        typer.Option("--max-tokens", help="Max output tokens per response."),
+    ] = DEFAULT_MAX_TOKENS,
     modes: Annotated[
         str,
         typer.Option("--modes", help="Comma-separated prompt modes."),
@@ -173,7 +178,7 @@ def run(
     provider_names = providers or ["anthropic"]
     if not dry_run:
         load_credentials()
-    built = [build_provider(name, model) for name in provider_names]
+    built = [build_provider(name, model, max_tokens) for name in provider_names]
 
     result = run_benchmark(fixture, built, mode_list, dry_run=dry_run)
     run_dir = store_run(result, out)
