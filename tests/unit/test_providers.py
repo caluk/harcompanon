@@ -8,6 +8,7 @@ from harcompanon.config import available_providers, build_provider
 from harcompanon.providers import (
     AnthropicProvider,
     GeminiProvider,
+    OpenAICompatProvider,
     OpenAIProvider,
     Provider,
     RawResponse,
@@ -46,6 +47,22 @@ def test_registry_has_all_three_providers() -> None:
     # Both satisfy the runtime_checkable protocol without importing their SDKs.
     assert isinstance(openai, Provider)
     assert isinstance(gemini, Provider)
+
+
+def test_openai_compatible_providers_are_registered() -> None:
+    assert {"deepseek", "mistral", "kimi"} <= set(available_providers())
+    deepseek = build_provider("deepseek")
+    assert isinstance(deepseek, OpenAICompatProvider)
+    assert deepseek.name == "deepseek"
+    assert deepseek.base_url == "https://api.deepseek.com"
+    assert deepseek.api_key_env == "DEEPSEEK_API_KEY"
+    assert deepseek.model == "deepseek-chat"
+    assert isinstance(deepseek, Provider)
+    # override model + other vendors resolve their own base url / env
+    assert build_provider("kimi", model="kimi-x").model == "kimi-x"
+    mistral = build_provider("mistral")
+    assert isinstance(mistral, OpenAICompatProvider)
+    assert mistral.base_url == "https://api.mistral.ai/v1"
 
 
 def test_unknown_provider_raises() -> None:
