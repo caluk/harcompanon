@@ -18,14 +18,33 @@ from harcompanon.preprocess.security import REDACTED_MARKER, collect_secrets
 REDACTION = REDACTED_MARKER
 
 
+def _forms(secret: str) -> set[str]:
+    """The shapes a secret can take in the raw HAR text.
+
+    ``collect_secrets`` returns *parsed* values, but a value with quotes/backslashes/control
+    chars (e.g. a cookie) appears **JSON-escaped** in the file — a literal replace of the parsed
+    form would silently miss it. Cover the verbatim form and both JSON-escaped variants.
+    """
+    return {
+        secret,
+        json.dumps(secret, ensure_ascii=False)[1:-1],
+        json.dumps(secret, ensure_ascii=True)[1:-1],
+    }
+
+
+def _occurrences(text: str, raw: dict[str, Any]) -> int:
+    return sum(text.count(form) for secret in collect_secrets(raw) for form in _forms(secret))
+
+
 def redact_text(har_text: str, raw: dict[str, Any]) -> tuple[str, int]:
-    """Replace each detected secret value in ``har_text``; return (text, occurrences_removed)."""
+    """Replace each detected secret value (in every form) in ``har_text``."""
     removed = 0
     for secret in collect_secrets(raw):
-        occurrences = har_text.count(secret)
-        if occurrences:
-            har_text = har_text.replace(secret, REDACTION)
-            removed += occurrences
+        for form in _forms(secret):
+            count = har_text.count(form)
+            if count:
+                har_text = har_text.replace(form, REDACTION)
+                removed += count
     return har_text, removed
 
 
@@ -42,5 +61,5 @@ def redact_file(path: Path, output: Path) -> tuple[int, int]:
 
     redacted_text, removed = redact_text(text, raw)
     output.write_text(redacted_text, encoding="utf-8")
-    remaining = sum(redacted_text.count(secret) for secret in collect_secrets(raw))
+    remaining = _occurrences(redacted_text, raw)
     return removed, remaining
