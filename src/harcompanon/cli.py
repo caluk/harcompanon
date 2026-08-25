@@ -23,6 +23,7 @@ from harcompanon.prompts import available_modes
 from harcompanon.redact import redact_file
 from harcompanon.storage import load_run, store_run
 from harcompanon.structural_check import check_run, report_markdown
+from harcompanon.summary import load_runs, summarize
 
 app = typer.Typer(
     add_completion=False,
@@ -256,6 +257,34 @@ def closeout(
     dest = output or (run_dir / "closeout.md")
     dest.write_text(generate_closeout(run), encoding="utf-8")
     typer.secho(f"Close-out scaffold -> {dest}", fg=typer.colors.GREEN, err=True)
+
+
+@app.command()
+def summary(
+    paths: Annotated[
+        list[Path] | None,
+        typer.Argument(help="Run dir(s) or parent dir(s) of runs. Default: runs/"),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Write the summary here (default: stdout)."),
+    ] = None,
+) -> None:
+    """Descriptive cross-run summary (indicators, not a verdict)."""
+    runs = load_runs(paths or [Path("runs")])
+    if not runs:
+        typer.secho("No runs found (looked for run.json).", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2)
+    text = summarize(runs)
+    if output is None:
+        typer.echo(text, nl=False)
+        return
+    output.write_text(text, encoding="utf-8")
+    typer.secho(
+        f"Summary of {len(runs)} run(s) -> {output} (indicators, not a verdict)",
+        fg=typer.colors.GREEN,
+        err=True,
+    )
 
 
 if __name__ == "__main__":
