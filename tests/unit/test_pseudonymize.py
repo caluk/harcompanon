@@ -57,12 +57,18 @@ def test_generic_key_scramble_preserves_character_classes() -> None:
     assert synth[:2].isupper() and synth[6:].isdigit()
 
 
-def test_number_synthesis_preserves_length_and_type() -> None:
+def test_city_keys_collapse_to_one_real_looking_city() -> None:
+    # Cities become a plausible fixed name (not gibberish), so a companion doesn't detect scrubbing.
     p = Pseudonymizer()
-    as_int = p._synth_number(45210)
-    as_float = p._synth_number(12.5)
-    assert isinstance(as_int, int) and as_int != 45210 and len(str(as_int)) == 5
-    assert isinstance(as_float, float)
+    assert p._synth("Bremen", "city") == "Berlin"
+    assert p._synth("Munich", "city") == "Berlin"  # all cities collapse to the same value
+
+
+def test_vin_keeps_its_wmi_prefix() -> None:
+    # The 3-char WMI (manufacturer) is kept; only the vehicle-specific remainder changes.
+    p = Pseudonymizer()
+    synth = p._synth(REAL_VIN, "vin")
+    assert synth[:3] == REAL_VIN[:3] and synth != REAL_VIN and _VIN.fullmatch(synth)
 
 
 def _sample_har() -> dict[str, object]:
@@ -72,6 +78,7 @@ def _sample_har() -> dict[str, object]:
             "licensePlate": "HH-XX 1234",
             "deviceId": REAL_IMEI,
             "displayedMileage": 45210,
+            "city": "Bremen",
             "modelName": "RX 450h",  # not a PII key → kept
         }
     )
@@ -106,11 +113,14 @@ def test_pseudonymize_file_removes_pii_and_keeps_structure(tmp_path: Path) -> No
     counts = pseudonymize_file(src, out)
     text = out.read_text(encoding="utf-8")
 
-    for real in (REAL_UUID, REAL_VIN, REAL_IMEI, "HH-XX 1234", "45210"):
+    for real in (REAL_UUID, REAL_VIN, REAL_IMEI, "HH-XX 1234"):
         assert real not in text, f"real PII survived: {real}"
+    assert "Bremen" not in text and "Berlin" in text  # city → fixed real-looking name
     assert "RX 450h" in text  # non-PII value untouched
+    assert "45210" in text  # numbers (mileage) are left as-is — structure preserved
 
     assert counts["uuid"] >= 1 and counts["vin"] >= 1 and counts["imei"] >= 1
+    assert "number" not in counts  # numbers are never synthesized
 
     # Still valid JSON and still preprocesses.
     artifact = preprocess_file(out)
