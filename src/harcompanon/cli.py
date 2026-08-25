@@ -21,6 +21,7 @@ from harcompanon.judgment import generate_judgment
 from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
 from harcompanon.prompts import available_modes
 from harcompanon.providers.anthropic import DEFAULT_MAX_TOKENS
+from harcompanon.pseudonymize import pseudonymize_file
 from harcompanon.redact import redact_file
 from harcompanon.storage import load_run, store_run
 from harcompanon.structural_check import check_run, report_markdown
@@ -130,6 +131,36 @@ def redact(
             err=True,
         )
         raise typer.Exit(code=1)
+
+
+@app.command()
+def pseudonymize(
+    har: Annotated[
+        Path,
+        typer.Argument(
+            exists=True, dir_okay=False, readable=True, help="HAR file to pseudonymize."
+        ),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Write here (default: <name>.pseudo.har)."),
+    ] = None,
+) -> None:
+    """Replace domain PII (VINs, plates, IMEIs, UUIDs, addresses…) with synthetic data."""
+    dest = output or har.with_name(f"{har.stem}.pseudo.har")
+    counts = pseudonymize_file(har, dest)
+    total = sum(counts.values())
+    breakdown = ", ".join(f"{category}={n}" for category, n in sorted(counts.items())) or "nothing"
+    typer.secho(
+        f"Pseudonymized {total} distinct value(s) [{breakdown}] -> {dest}",
+        fg=typer.colors.GREEN,
+        err=True,
+    )
+    typer.secho(
+        "Heuristic — review the change above before sending or publishing.",
+        fg=typer.colors.YELLOW,
+        err=True,
+    )
 
 
 @app.command()
