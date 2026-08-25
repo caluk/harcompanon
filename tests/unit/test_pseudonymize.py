@@ -57,6 +57,13 @@ def test_generic_key_scramble_preserves_character_classes() -> None:
     assert synth[:2].isupper() and synth[6:].isdigit()
 
 
+def test_city_keys_collapse_to_one_real_looking_city() -> None:
+    # Cities become a plausible fixed name (not gibberish), so a companion doesn't detect scrubbing.
+    p = Pseudonymizer()
+    assert p._synth("Bremen", "city") == "Berlin"
+    assert p._synth("Munich", "city") == "Berlin"  # all cities collapse to the same value
+
+
 def test_vin_keeps_its_wmi_prefix() -> None:
     # The 3-char WMI (manufacturer) is kept; only the vehicle-specific remainder changes.
     p = Pseudonymizer()
@@ -71,6 +78,7 @@ def _sample_har() -> dict[str, object]:
             "licensePlate": "HH-XX 1234",
             "deviceId": REAL_IMEI,
             "displayedMileage": 45210,
+            "city": "Bremen",
             "modelName": "RX 450h",  # not a PII key → kept
         }
     )
@@ -107,6 +115,7 @@ def test_pseudonymize_file_removes_pii_and_keeps_structure(tmp_path: Path) -> No
 
     for real in (REAL_UUID, REAL_VIN, REAL_IMEI, "HH-XX 1234"):
         assert real not in text, f"real PII survived: {real}"
+    assert "Bremen" not in text and "Berlin" in text  # city → fixed real-looking name
     assert "RX 450h" in text  # non-PII value untouched
     assert "45210" in text  # numbers (mileage) are left as-is — structure preserved
 
