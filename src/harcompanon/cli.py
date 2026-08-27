@@ -16,7 +16,7 @@ import typer
 from harcompanon import __version__
 from harcompanon.closeout import generate_closeout
 from harcompanon.config import build_provider, load_credentials
-from harcompanon.execution import run_benchmark
+from harcompanon.execution import RunResponse, run_benchmark
 from harcompanon.judgment import generate_judgment
 from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
 from harcompanon.prompts import available_modes
@@ -211,7 +211,21 @@ def run(
         load_credentials()
     built = [build_provider(name, model, max_tokens) for name in provider_names]
 
-    result = run_benchmark(fixture, built, mode_list, dry_run=dry_run)
+    def progress(r: RunResponse, done: int, total: int) -> None:
+        # Stream one line per (provider, mode) so a long live run isn't silent until the end.
+        head = f"[{done}/{total}] {r.mode}/{r.provider}"
+        if r.error:
+            typer.secho(f"{head}  ✗ {r.error[:80]}", fg=typer.colors.RED, err=True)
+            return
+        secs = r.response.latency_ms / 1000
+        cost = f" ${r.response.cost_usd:.4f}" if r.response.cost_usd else ""
+        typer.secho(
+            f"{head}  ✓ {len(r.response.text)} chars, {secs:.1f}s{cost}",
+            fg=typer.colors.GREEN,
+            err=True,
+        )
+
+    result = run_benchmark(fixture, built, mode_list, dry_run=dry_run, on_response=progress)
     run_dir = store_run(result, out)
 
     errors = sum(1 for r in result.responses if r.error)
