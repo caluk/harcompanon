@@ -9,6 +9,7 @@ the whole pipeline without spending a token, so everything is testable without A
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -85,18 +86,27 @@ def run_benchmark(
     *,
     version: str = "v1",
     dry_run: bool = False,
+    on_response: Callable[[RunResponse, int, int], None] | None = None,
 ) -> RunResult:
-    """Run the fixture through every provider at every mode and collect the responses."""
+    """Run the fixture through every provider at every mode and collect the responses.
+
+    ``on_response`` (if given) is called after each (provider, mode) completes with the response
+    and its 1-based position / total, so a caller can stream progress during a long live run.
+    """
     artifact_json = preprocess_file(fixture).to_canonical_json()
     now = datetime.now(_TZ)
     created_at = now.isoformat(timespec="seconds")
     run_id = build_run_id(fixture, providers, now)
 
+    total = len(modes) * len(providers)
     responses: list[RunResponse] = []
     for mode in modes:
         prompt = render_prompt(mode, artifact_json, version)
         for provider in providers:
-            responses.append(_one(provider, mode, version, prompt, dry_run=dry_run))
+            result = _one(provider, mode, version, prompt, dry_run=dry_run)
+            responses.append(result)
+            if on_response is not None:
+                on_response(result, len(responses), total)
 
     return RunResult(
         run_id=run_id,

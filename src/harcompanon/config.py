@@ -50,14 +50,16 @@ _REGISTRY: dict[str, Callable[[str, int], Provider]] = {
 }
 
 #: name -> default model id used when the caller doesn't override it.
-#: These are sensible current defaults; verify/override per your account with --model.
+#: Each is the provider's current *flagship* (verified live 2026-08-27); override per account
+#: with --model. Gemini Pro and DeepSeek/Kimi require a funded account; Mistral Large and the
+#: Gemini free tier (Flash) do not.
 DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-opus-4-8",
-    "openai": "gpt-5",
-    "gemini": "gemini-2.5-pro",
-    "deepseek": "deepseek-chat",
+    "openai": "gpt-5.2",
+    "gemini": "gemini-pro-latest",
+    "deepseek": "deepseek-v4-pro",
     "mistral": "mistral-large-latest",
-    "kimi": "kimi-k2-0905-preview",
+    "kimi": "kimi-k3",
 }
 
 
