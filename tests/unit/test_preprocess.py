@@ -77,6 +77,36 @@ def test_oversized_json_body_is_stripped_but_small_one_kept() -> None:
     assert calls["https://api.example.com/small"].response_body == {"ok": True}  # small kept
 
 
+def test_bodyless_statuses_never_carry_a_body_marker() -> None:
+    # A browser stapling cached content onto a 304 (or 204/HEAD) must not surface as a body —
+    # otherwise models read our capture artifact as a "protocol violation" instead of testing.
+    def entry(path: str, method: str, status: int) -> dict[str, object]:
+        return {
+            "request": {"method": method, "url": f"https://api.example.com/{path}", "headers": []},
+            "response": {
+                "status": status,
+                "headers": [],
+                "content": {"mimeType": "image/png", "size": 58000, "text": "cached-bytes"},
+            },
+        }
+
+    raw = {
+        "log": {
+            "entries": [
+                entry("photo", "GET", 304),
+                entry("empty", "POST", 204),
+                entry("head", "HEAD", 200),
+                entry("real", "GET", 200),  # control: a genuine body IS stripped to a marker
+            ]
+        }
+    }
+    calls = {c.url: c for c in preprocess_har(raw).calls}
+    assert calls["https://api.example.com/photo"].response_body is None  # 304
+    assert calls["https://api.example.com/empty"].response_body is None  # 204
+    assert calls["https://api.example.com/head"].response_body is None  # HEAD
+    assert isinstance(calls["https://api.example.com/real"].response_body, str)  # 200 kept
+
+
 def test_curated_headers_kept_and_content_type_excluded() -> None:
     users = {c.url: c for c in preprocess_file(SAMPLE).calls}["https://api.example.com/v1/users"]
     assert users.response_headers["content-security-policy"] == "default-src 'self'"
