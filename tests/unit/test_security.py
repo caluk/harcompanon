@@ -43,6 +43,34 @@ def test_scanner_finds_expected_categories() -> None:
         assert expected in categories, f"missing {expected}: {categories}"
 
 
+def test_detects_suffixed_and_escaped_credential_fields() -> None:
+    from harcompanon.preprocess.security import collect_secrets
+
+    # A body serialized as a JSON *string* inside another body: quotes are backslash-escaped,
+    # and the key carries a prefix (publicApiToken / refreshToken) — both defeated the old regex.
+    inner = json.dumps({"publicApiToken": "bd4c129e633944a4e2f794ae236720bb", "siteType": "web"})
+    raw = {
+        "log": {
+            "entries": [
+                {
+                    "request": {"method": "GET", "url": "https://x/", "headers": []},
+                    "response": {
+                        "status": 200,
+                        "headers": [],
+                        "content": {
+                            "mimeType": "application/json",
+                            "text": json.dumps({"cfg": inner}),
+                        },
+                    },
+                }
+            ]
+        }
+    }
+    secrets = collect_secrets(raw)
+    assert "bd4c129e633944a4e2f794ae236720bb" in secrets  # token caught despite escaping + prefix
+    assert "web" not in secrets  # short non-secret value not collected
+
+
 def test_severity_classification() -> None:
     report = scan_file(SECRETS)
     by_cat = {f.category: f.severity for f in report.findings}
