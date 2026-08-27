@@ -229,8 +229,6 @@ __marimo__/
 
 # Local-only HAR captures. Real/personal captures live in fixtures/ for local dev but must
 # never be committed. Everything in fixtures/ is ignored by default (including .redacted.har
-# outputs); only the explicitly-allowed, safe fixtures below are tracked. To commit a new
-# safe fixture, add a matching "!" line here.
+# and .pseudo.har outputs). No fixtures are currently tracked. To commit a safe/public one,
+# add a matching "!/fixtures/<name>.har" line below.
 /fixtures/*.har
-!/fixtures/dash.har
-!/fixtures/perf.har

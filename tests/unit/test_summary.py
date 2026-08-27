@@ -57,23 +57,23 @@ def _run(fixture: str, structured_text: str, cost: float | None = 0.05) -> RunRe
 
 
 def test_summarize_counts_findings_and_oracles() -> None:
-    text = summarize([_run("dash.har", STRUCTURED)])
+    text = summarize([_run("sample.har", STRUCTURED)])
     assert "Descriptive indicators, not a verdict" in text
     # structured row: 2 findings, 2 oracles named, conforms yes
-    assert "| dash.har | structured | fake | fake-1 | 2 | 2 | yes |" in text
+    assert "| sample.har | structured | fake | fake-1 | 2 | 2 | yes |" in text
     # minimal row shows blanks for the structured-only metrics
-    assert "| dash.har | minimal | fake | fake-1 | — | — | — |" in text
+    assert "| sample.har | minimal | fake | fake-1 | — | — | — |" in text
     # per-fixture rollup present
     assert "## Per-fixture (structured responses)" in text
-    assert "| dash.har | 2 | 2 | 1 | 1 |" in text
+    assert "| sample.har | 2 | 2 | 1 | 1 |" in text
 
 
 def test_load_runs_from_parent_dir(tmp_path: Path) -> None:
-    store_run(_run("dash.har", STRUCTURED), tmp_path)
-    store_run(_run("perf.har", STRUCTURED), tmp_path)
+    store_run(_run("sample.har", STRUCTURED), tmp_path)
+    store_run(_run("other.har", STRUCTURED), tmp_path)
     runs = load_runs([tmp_path])
     assert len(runs) == 2
-    assert {r.fixture for r in runs} == {"dash.har", "perf.har"}
+    assert {r.fixture for r in runs} == {"sample.har", "other.har"}
 
 
 def test_cli_summary(tmp_path: Path) -> None:
