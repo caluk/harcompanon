@@ -7,6 +7,7 @@ the package nor a key.
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 
@@ -28,6 +29,10 @@ class GeminiProvider:
     def complete(self, prompt: str) -> RawResponse:
         from google import genai
         from google.genai import types
+
+        # The SDK logs a spurious "direct use of automatic function calling (AFC)" warning on
+        # every generate_content call, even though we pass no tools. Silence just that logger.
+        logging.getLogger("google_genai.models").setLevel(logging.ERROR)
 
         api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         client = genai.Client(api_key=api_key)
