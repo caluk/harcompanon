@@ -70,10 +70,13 @@ _PATTERNS: list[tuple[str, Severity, re.Pattern[str]]] = [
     ("email", Severity.LOW, re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),
 ]
 
-#: Credential-bearing JSON/body fields: "<key>": "<value>".
+#: Credential-bearing JSON/body fields: "<key>": "<value>". The key may carry a prefix
+#: (``publicApiToken``, ``refreshToken``, ``clientSecret``) and — for a body serialized as a
+#: JSON *string* inside another body — the quotes may be backslash-escaped (``\"key\":\"val\"``).
 _CREDENTIAL_FIELD = re.compile(
-    r'"(password|passwd|pwd|secret|client_secret|api_key|apikey|access_token|token)"'
-    r'\s*:\s*"([^"]{1,})"',
+    r'\\?"([A-Za-z0-9_]*'
+    r"(?:password|passwd|pwd|client_secret|secret|api_?key|access_?token|token))\\?\""
+    r'\s*:\s*\\?"([^"\\]{4,})',
     re.IGNORECASE,
 )
 _HIGH_CREDENTIAL_FIELDS = {"password", "passwd", "pwd", "secret", "client_secret"}
