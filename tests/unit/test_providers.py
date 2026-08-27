@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from harcompanon.config import available_providers, build_provider
+from harcompanon.config import DEFAULT_MODELS, available_providers, build_provider
 from harcompanon.providers import (
     AnthropicProvider,
     GeminiProvider,
@@ -48,9 +48,9 @@ def test_registry_has_all_three_providers() -> None:
     openai = build_provider("openai")
     gemini = build_provider("gemini")
     assert isinstance(openai, OpenAIProvider)
-    assert openai.model == "gpt-5"
+    assert openai.model == DEFAULT_MODELS["openai"]
     assert isinstance(gemini, GeminiProvider)
-    assert gemini.model == "gemini-2.5-pro"
+    assert gemini.model == DEFAULT_MODELS["gemini"]
     # Both satisfy the runtime_checkable protocol without importing their SDKs.
     assert isinstance(openai, Provider)
     assert isinstance(gemini, Provider)
@@ -63,7 +63,7 @@ def test_openai_compatible_providers_are_registered() -> None:
     assert deepseek.name == "deepseek"
     assert deepseek.base_url == "https://api.deepseek.com"
     assert deepseek.api_key_env == "DEEPSEEK_API_KEY"
-    assert deepseek.model == "deepseek-chat"
+    assert deepseek.model == DEFAULT_MODELS["deepseek"]
     assert isinstance(deepseek, Provider)
     # override model + other vendors resolve their own base url / env
     assert build_provider("kimi", model="kimi-x").model == "kimi-x"
