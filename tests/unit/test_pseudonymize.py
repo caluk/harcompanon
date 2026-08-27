@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 
 from harcompanon.cli import app
 from harcompanon.preprocess import preprocess_file
-from harcompanon.pseudonymize import _IMEI, _UUID, _VIN, Pseudonymizer, pseudonymize_file
+from harcompanon.pseudonymize import _IMEI, _IPV4, _UUID, _VIN, Pseudonymizer, pseudonymize_file
 
 runner = CliRunner()
 
@@ -125,6 +125,53 @@ def test_pseudonymize_file_removes_pii_and_keeps_structure(tmp_path: Path) -> No
     # Still valid JSON and still preprocesses.
     artifact = preprocess_file(out)
     assert artifact.total_entries == 1
+
+
+def test_names_services_and_ips_use_fixed_labels_and_literal_replacement(tmp_path: Path) -> None:
+    real_ip = "77.0.27.172"
+    body = json.dumps({"ip": real_ip, "city": "Hamburg", "country": "Germany"})
+    profile = json.dumps({"display_name": "Jane Doe", "repairerName": "WELLER", "name": "Alster"})
+    har = {
+        "log": {
+            "entries": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": f"https://x/geoip/{real_ip}",
+                        "headers": [],
+                    },
+                    "response": {
+                        "status": 200,
+                        "content": {"mimeType": "application/json", "text": body},
+                    },
+                },
+                {
+                    "request": {"method": "GET", "url": "https://x/me", "headers": []},
+                    "response": {
+                        "status": 200,
+                        "content": {"mimeType": "application/json", "text": profile},
+                    },
+                },
+            ]
+        }
+    }
+    src = tmp_path / "in.har"
+    src.write_text(json.dumps(har), encoding="utf-8")
+    out = tmp_path / "out.har"
+    pseudonymize_file(src, out)
+    text = out.read_text(encoding="utf-8")
+
+    assert "Antonio Banderas" in text and "Jane Doe" not in text  # person name → fixed label
+    assert (
+        "Lexus Service" in text and "WELLER" not in text
+    )  # service name → fixed label (not gibberish)
+    assert "Alster" in text  # a place name under bare "name" is NOT touched (map evidence)
+    assert real_ip not in text  # the client IP is gone from BOTH the body key and the URL path
+    # The URL-path IP got the SAME synthetic IP as the body key (literal, consistent).
+    out_har = json.loads(text)
+    url = out_har["log"]["entries"][0]["request"]["url"]
+    synth_ip = url.rsplit("/", 1)[1]
+    assert _IPV4.fullmatch(synth_ip) and synth_ip != real_ip
 
 
 def test_cli_pseudonymize(tmp_path: Path) -> None:
