@@ -69,7 +69,7 @@ def _run(structured_text: str) -> RunResult:
 
     return RunResult(
         run_id="r1",
-        fixture="dash.har",
+        fixture="sample.har",
         created_at="2026-08-24T13:00:00+02:00",
         dry_run=False,
         providers=["fake"],
