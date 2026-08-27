@@ -9,10 +9,13 @@ identifiers change; **numbers are left untouched** (scrambling an odometer would
 monotonic history and manufacture a false "impossible mileage" finding).
 
 Two passes:
-- **key-based** — *string* values of configured PII keys inside JSON bodies (``vin``,
-  ``licensePlate``, ``deviceId``, ``mobileNo``, ``address``, ``city`` …) are replaced.
+- **key-based** — *string* values of configured PII keys inside JSON bodies are replaced. Some
+  key classes collapse to one fixed, real-looking label instead of a gibberish scramble:
+  ``city`` → ``Berlin``, person names (``display_name`` …) → ``Antonio Banderas``, service/dealer
+  names → ``Lexus Service``. IP-valued keys become a valid-looking IPv4.
 - **pattern-based** — UUIDs and (letter-bearing) VINs are replaced wherever they appear (URL
-  paths, ``_initiator.url``, the ``:path`` header, bodies).
+  paths, ``_initiator.url``, the ``:path`` header, bodies). IPs and names learned from a key are
+  additionally replaced *literally* wherever they recur (e.g. a client IP in a geoip URL path).
 
 Heuristic, like ``redact``: it can't *guarantee* it caught every PII field in an arbitrary API —
 review the change report before sending or publishing.
@@ -53,13 +56,11 @@ DEFAULT_PII_KEYS: frozenset[str] = frozenset(
         "stateorprovince",
         "latitude",
         "longitude",
-        "lat",
-        "lon",
-        "lng",
-        "name",
+        # NB: bare "name"/"lat"/"lng" are deliberately NOT here — in map/POI APIs they hold
+        # legitimate place names and coordinates (komoot has 1064 POI lat/lng, 75 place names).
+        # Person names go through NAME_KEYS; numeric coords are left untouched anyway.
         "firstname",
         "lastname",
-        "fullname",
         "givenname",
         "familyname",
         "dob",
@@ -68,8 +69,6 @@ DEFAULT_PII_KEYS: frozenset[str] = frozenset(
         "mileage",
         "displayedmileage",
         "odometer",
-        "repairername",
-        "dealername",
         "devicedetails",
     }
 )
@@ -82,11 +81,25 @@ _VIN = re.compile(r"\b(?=[A-HJ-NPR-Z0-9]*[A-HJ-NPR-Z])[A-HJ-NPR-Z0-9]{17}\b")
 _IMEI = re.compile(r"\b\d{15}\b")
 _VIN_ALPHABET = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789"  # standard VIN excludes I, O, Q
 
-#: City keys map to one fixed, real-looking city rather than a format-preserving scramble —
-#: a plausible name ("Berlin") reads as real data instead of the gibberish ("Bhtilv") that tips a
-#: companion off that the capture was anonymized. All real cities collapse to the same value.
+#: Some key classes map to ONE fixed, real-looking label rather than a format-preserving scramble
+#: — a plausible value reads as real data instead of the gibberish ("Bhtilv", "VPVVWO") that tips a
+#: companion off that the capture was anonymized. All real values in a class collapse to the label.
 CITY_KEYS: frozenset[str] = frozenset({"city"})
 CITY_REPLACEMENT = "Berlin"
+#: Person full-name keys (NOT bare "name" — that is a place/POI name in map APIs).
+NAME_KEYS: frozenset[str] = frozenset({"display_name", "displayname", "fullname", "full_name"})
+NAME_REPLACEMENT = "Antonio Banderas"
+#: Service / dealer names (e.g. a car dealer's workshop).
+SERVICE_KEYS: frozenset[str] = frozenset(
+    {"repairername", "dealername", "repairer_name", "dealer_name"}
+)
+SERVICE_REPLACEMENT = "Lexus Service"
+#: Keys whose value is an IP address — synthesized to a valid-looking IPv4 and, because the same
+#: IP also shows up in URL paths (e.g. a geoip lookup), replaced literally everywhere it appears.
+IP_KEYS: frozenset[str] = frozenset({"ip", "ipaddress", "ip_address", "client_ip", "remote_addr"})
+#: Strict IPv4 (each octet 0-255) so version strings like Chrome/149.0.0.0 don't match.
+_OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+_IPV4 = re.compile(rf"{_OCTET}(?:\.{_OCTET}){{3}}")
 
 
 class Pseudonymizer:
@@ -96,6 +109,9 @@ class Pseudonymizer:
         self.pii_keys = {k.lower() for k in pii_keys}
         self._map: dict[str, str] = {}
         self._synth_values: set[str] = set()  # outputs we produced — never re-map them
+        #: real→synth for values that must ALSO be replaced literally wherever they appear
+        #: (an IP or name learned from a body key but also embedded in a URL path / free text).
+        self._literals: dict[str, str] = {}
         self.counts: Counter[str] = Counter()
 
     # --- format-preserving generators (deterministic per real value) ---
@@ -127,6 +143,13 @@ class Pseudonymizer:
                 out.append(ch)
         return "".join(out)
 
+    def _fake_ip(self, real: str) -> str:
+        """A valid-looking IPv4 (octets 1-254), deterministic per real address."""
+        octets = real.split(".")
+        if len(octets) != 4:
+            return self._fake_generic(real)
+        return ".".join(str(1 + self._digest(f"ip{i}", real)[0] % 254) for i in range(4))
+
     def _synth(self, real: str, category: str) -> str:
         if real in self._map:
             return self._map[real]
@@ -134,6 +157,12 @@ class Pseudonymizer:
             return real  # idempotent: a value we already produced is left as-is on re-passes
         if category == "city":
             synth = CITY_REPLACEMENT
+        elif category == "name":
+            synth = NAME_REPLACEMENT
+        elif category == "service":
+            synth = SERVICE_REPLACEMENT
+        elif category == "ip":
+            synth = self._fake_ip(real)
         elif category == "uuid":
             synth = self._fake_uuid(real)
         elif category == "vin":
@@ -146,8 +175,28 @@ class Pseudonymizer:
             synth = self._fake_generic(real)
         self._map[real] = synth
         self._synth_values.add(synth)
+        # IPs and names also appear outside JSON keys (URL paths, free text) — remember them so the
+        # deep pass can replace the exact real value literally wherever it shows up.
+        if category in ("ip", "name"):
+            self._literals[real] = synth
         self.counts[category] += 1
         return synth
+
+    def _key_category(self, key_l: str, value: Any) -> str | None:
+        """Which synthesis category applies to this key/value, or None to leave it untouched."""
+        if not isinstance(value, str) or not value:
+            return None
+        if key_l in NAME_KEYS:
+            return "name"
+        if key_l in SERVICE_KEYS:
+            return "service"
+        if key_l in IP_KEYS:
+            return "ip" if _IPV4.fullmatch(value) else None
+        if key_l in CITY_KEYS:
+            return "city"
+        if key_l in self.pii_keys:
+            return self._classify(value)
+        return None
 
     def _classify(self, value: str) -> str:
         if _UUID.fullmatch(value):
@@ -172,11 +221,9 @@ class Pseudonymizer:
         if isinstance(obj, dict):
             result: dict[str, Any] = {}
             for key, value in obj.items():
-                key_l = key.lower()
-                if key_l in CITY_KEYS and isinstance(value, str) and value:
-                    result[key] = self._synth(value, "city")
-                elif key_l in self.pii_keys and isinstance(value, str) and value:
-                    result[key] = self._synth(value, self._classify(value))
+                category = self._key_category(key.lower(), value)
+                if category is not None and isinstance(value, str):
+                    result[key] = self._synth(value, category)
                 else:
                     # Numbers (odometer/mileage, coordinates) are left as-is: scrambling them
                     # destroys real structure (e.g. monotonic mileage) and manufactures findings.
@@ -201,8 +248,20 @@ class Pseudonymizer:
         if isinstance(obj, list):
             return [self.apply_patterns_deep(item) for item in obj]
         if isinstance(obj, str):
-            return self.replace_patterns(obj)
+            return self._apply_literals(self.replace_patterns(obj))
         return obj
+
+    def _apply_literals(self, text: str) -> str:
+        """Replace each known real IP/name literal wherever it appears (URL paths, free text).
+
+        Boundary-guarded so an IP isn't matched inside a longer number (e.g. ``77.0.27.172`` must
+        not fire inside ``77.0.27.1720``). Only exact learned values are touched — never a pattern
+        — so there are no false positives.
+        """
+        for real, synth in self._literals.items():
+            if real in text:
+                text = re.sub(rf"(?<![\w.]){re.escape(real)}(?![\w.])", synth, text)
+        return text
 
     def process_body(self, text: str) -> str:
         try:
@@ -224,10 +283,14 @@ def pseudonymize_file(
     log = raw.get("log")
     raw_entries = log.get("entries") if isinstance(log, dict) else None
     entries: list[Any] = raw_entries if isinstance(raw_entries, list) else []
-    for index, entry in enumerate(entries):
+
+    # Pass 1 — key-based body synthesis across *all* entries (plates, mileage, addresses; and
+    # learn the IP/name literals). Done for every entry before any literal is applied, so a value
+    # learned late (e.g. from a geoip JSON body) still reaches an earlier entry — like an HTML
+    # document at entry 0 that inlines the same name/IP and is never JSON-parsed.
+    for entry in entries:
         if not isinstance(entry, dict):
             continue
-        # Key-based body synthesis first (plates, mileage, addresses inside JSON bodies)…
         request = entry.get("request")
         response = entry.get("response")
         if isinstance(request, dict):
@@ -238,9 +301,12 @@ def pseudonymize_file(
             content = response.get("content")
             if isinstance(content, dict) and isinstance(content.get("text"), str):
                 content["text"] = p.process_body(content["text"])
-        # …then a blanket pattern pass over every remaining string in the entry (URLs wherever
-        # they hide). Idempotent, so it harmlessly re-touches the bodies just processed.
-        entries[index] = p.apply_patterns_deep(entry)
+
+    # Pass 2 — blanket pattern + literal pass over every string in every entry (URLs and any body,
+    # including non-JSON HTML). Idempotent, so re-touching the bodies from pass 1 is a no-op.
+    for index, entry in enumerate(entries):
+        if isinstance(entry, dict):
+            entries[index] = p.apply_patterns_deep(entry)
 
     output.write_text(json.dumps(raw, ensure_ascii=False) + "\n", encoding="utf-8")
     return p.counts
