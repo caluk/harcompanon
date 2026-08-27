@@ -75,19 +75,22 @@ pipeline without spending a token. Providers default to `anthropic`; repeat `-p`
 pip install -e ".[dev]"
 cp .env.example .env          # then add your provider keys (never committed)
 
-harcompanon run fixtures/dash.har --dry-run          # no API call, no spend
-harcompanon run fixtures/dash.har --live -p anthropic # one real run
+harcompanon run fixtures/your-capture.har --dry-run          # no API call, no spend
+harcompanon run fixtures/your-capture.har --live -p anthropic # one real run
 harcompanon check runs/<run-id>
-harcompanon judge runs/<run-id>                      # then fill in judgment.yml
+harcompanon judge runs/<run-id>                              # then fill in judgment.yml
 harcompanon closeout runs/<run-id>
 ```
 
+You supply your own HAR — capture one from a site you're testing (DevTools → Network →
+"Save all as HAR"), then `redact` (and `pseudonymize` if it holds domain PII) before use.
+
 ## Fixtures
 
-Frozen HAR captures live in [`fixtures/`](fixtures). Only safe, public-demo captures are
-committed (`dash.har`, `perf.har` — the OrangeHRM demo); real/personal captures are kept
-local and git-ignored. If you add a capture from a real system, **`redact` it and review it**
-before it goes anywhere public. See [fixtures/README.md](fixtures/README.md).
+Frozen HAR captures live in [`fixtures/`](fixtures) and are **git-ignored by default** — no
+captures are committed, since real ones carry personal data. Bring your own: if it comes from
+a real system, **`redact` it and review it** before it goes anywhere public. See
+[fixtures/README.md](fixtures/README.md).
 
 ## Status
 

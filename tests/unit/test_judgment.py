@@ -41,7 +41,7 @@ def _response(mode: str, text: str, cost: float | None = None) -> RunResponse:
 def _run() -> RunResult:
     return RunResult(
         run_id="dash_fake-1_2026-08-24_13-11-56",
-        fixture="dash.har",
+        fixture="sample.har",
         created_at="2026-08-24T13:11:56+02:00",
         dry_run=False,
         providers=["fake"],
@@ -82,7 +82,7 @@ def test_closeout_has_the_five_questions_and_metadata() -> None:
         "## 5. Now what?",
     ):
         assert heading in text
-    assert "dash.har" in text
+    assert "sample.har" in text
     assert "$0.0200" in text  # total cost from the structured response
 
 

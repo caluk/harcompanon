@@ -39,6 +39,17 @@ def _human_size(num_bytes: int) -> str:
     return f"{num_bytes / (1024 * 1024):.1f} MB"
 
 
+def _status_forbids_body(method: str, status: int) -> bool:
+    """HTTP methods/statuses that carry no message body.
+
+    A body attached to one of these is a *capture* artifact — most often a browser stapling
+    cached content onto a ``304 Not Modified`` — not something the server sent. Surfacing it as
+    a ``<stripped: ...>`` marker makes every model cry "protocol violation" about our pipeline
+    instead of testing the API, so we drop it. HEAD, 204, 304 and all 1xx have no body.
+    """
+    return method.upper() == "HEAD" or status in (204, 304) or 100 <= status < 200
+
+
 def _body(
     text: Any,
     is_json: bool,
@@ -92,12 +103,14 @@ def _extract_call(entry: dict[str, Any], rules: NoiseRules) -> CleanedCall | Non
     request_ct = _mime(post)
     response_ct = _mime(content)
 
+    method = str(request.get("method", ""))
+    status = int(response.get("status", 0) or 0)
     started = entry.get("startedDateTime")
     time_value = entry.get("time")
     return CleanedCall(
-        method=str(request.get("method", "")),
+        method=method,
         url=url,
-        status=int(response.get("status", 0) or 0),
+        status=status,
         started_at=started if isinstance(started, str) else None,
         time_ms=float(time_value) if isinstance(time_value, (int, float)) else None,
         request_content_type=request_ct,
@@ -112,13 +125,17 @@ def _extract_call(entry: dict[str, Any], rules: NoiseRules) -> CleanedCall | Non
             None,
             rules.max_body_chars,
         ),
-        response_body=_body(
-            content.get("text"),
-            rules.is_json_content_type(response_ct),
-            response_ct,
-            content.get("size"),
-            content.get("encoding"),
-            rules.max_body_chars,
+        response_body=(
+            None
+            if _status_forbids_body(method, status)
+            else _body(
+                content.get("text"),
+                rules.is_json_content_type(response_ct),
+                response_ct,
+                content.get("size"),
+                content.get("encoding"),
+                rules.max_body_chars,
+            )
         ),
     )
 
