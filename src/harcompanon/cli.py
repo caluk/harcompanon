@@ -16,7 +16,7 @@ import typer
 from harcompanon import __version__
 from harcompanon.closeout import generate_closeout
 from harcompanon.config import build_provider, load_credentials
-from harcompanon.execution import RunResponse, run_benchmark
+from harcompanon.execution import RunResponse, retry_failed, run_benchmark
 from harcompanon.judgment import generate_judgment
 from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
 from harcompanon.prompts import available_modes
@@ -163,6 +163,21 @@ def pseudonymize(
     )
 
 
+def _progress(r: RunResponse, done: int, total: int) -> None:
+    """Stream one line per (provider, mode) so a long live run isn't silent until the end."""
+    head = f"[{done}/{total}] {r.mode}/{r.provider}"
+    if r.error:
+        typer.secho(f"{head}  ✗ {r.error[:80]}", fg=typer.colors.RED, err=True)
+        return
+    secs = r.response.latency_ms / 1000
+    cost = f" ${r.response.cost_usd:.4f}" if r.response.cost_usd else ""
+    typer.secho(
+        f"{head}  ✓ {len(r.response.text)} chars, {secs:.1f}s{cost}",
+        fg=typer.colors.GREEN,
+        err=True,
+    )
+
+
 @app.command()
 def run(
     fixture: Annotated[
@@ -211,21 +226,7 @@ def run(
         load_credentials()
     built = [build_provider(name, model, max_tokens) for name in provider_names]
 
-    def progress(r: RunResponse, done: int, total: int) -> None:
-        # Stream one line per (provider, mode) so a long live run isn't silent until the end.
-        head = f"[{done}/{total}] {r.mode}/{r.provider}"
-        if r.error:
-            typer.secho(f"{head}  ✗ {r.error[:80]}", fg=typer.colors.RED, err=True)
-            return
-        secs = r.response.latency_ms / 1000
-        cost = f" ${r.response.cost_usd:.4f}" if r.response.cost_usd else ""
-        typer.secho(
-            f"{head}  ✓ {len(r.response.text)} chars, {secs:.1f}s{cost}",
-            fg=typer.colors.GREEN,
-            err=True,
-        )
-
-    result = run_benchmark(fixture, built, mode_list, dry_run=dry_run, on_response=progress)
+    result = run_benchmark(fixture, built, mode_list, dry_run=dry_run, on_response=_progress)
     run_dir = store_run(result, out)
 
     errors = sum(1 for r in result.responses if r.error)
@@ -238,6 +239,54 @@ def run(
     )
     if not dry_run and total_cost:
         typer.secho(f"Total cost: ${total_cost:.4f}", fg=typer.colors.GREEN, err=True)
+
+
+@app.command()
+def retry(
+    run_dir: Annotated[
+        Path,
+        typer.Argument(exists=True, file_okay=False, help="A run directory (contains run.json)."),
+    ],
+    fixture: Annotated[
+        Path | None,
+        typer.Option("--fixture", help="Fixture to re-render from (default: fixtures/<name>)."),
+    ] = None,
+    max_tokens: Annotated[
+        int,
+        typer.Option("--max-tokens", help="Max output tokens per response."),
+    ] = DEFAULT_MAX_TOKENS,
+) -> None:
+    """Re-run only a run's failed responses, back into the same run (fixes transient errors)."""
+    run = load_run(run_dir)
+    failed = [r for r in run.responses if r.error]
+    if not failed:
+        typer.secho("No errored responses to retry.", fg=typer.colors.GREEN, err=True)
+        return
+
+    src = fixture or (Path("fixtures") / run.fixture)
+    if not src.is_file():
+        typer.secho(
+            f"Fixture not found at {src}. Pass --fixture <path> to the original HAR.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    typer.secho(f"Retrying {len(failed)} failed response(s) in {run_dir}…", err=True)
+    load_credentials()
+    updated = retry_failed(
+        run,
+        src,
+        lambda name, model: build_provider(name, model, max_tokens),
+        on_response=_progress,
+    )
+    store_run(updated, run_dir.parent)
+    still = sum(1 for r in updated.responses if r.error)
+    typer.secho(
+        f"Retried -> {run_dir} ({still} still failing)",
+        fg=typer.colors.RED if still else typer.colors.GREEN,
+        err=True,
+    )
 
 
 @app.command()
