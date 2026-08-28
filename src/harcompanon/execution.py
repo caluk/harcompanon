@@ -84,7 +84,7 @@ def run_benchmark(
     providers: list[Provider],
     modes: list[str],
     *,
-    version: str = "v1",
+    version: str = "v2",
     dry_run: bool = False,
     on_response: Callable[[RunResponse, int, int], None] | None = None,
 ) -> RunResult:

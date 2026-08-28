@@ -19,11 +19,13 @@ SAMPLE = Path(__file__).parents[1] / "data" / "sample.har"
 runner = CliRunner()
 
 GOOD = (
+    "## Start here\n- ...\n"
     "## Findings\n"
-    "### 1. Timezone mismatch\n- Observation — a\n- Oracle — b\n- Status — hypothesis\n"
-    "### 2. Slow dashboard\n- Observation — a\n- Oracle — b\n- Status — hypothesis\n"
+    "### 1. Timezone mismatch\n- Observation — a\n- Interpretation — b\n- Next investigation — c\n"
+    "### 2. Slow dashboard\n- Observation — a\n- Interpretation — b\n- Next investigation — c\n"
+    "## Coverage and blind spots\n- ...\n"
     "## Questions only a human can answer\n- ...\n"
-    "## Self-critique\n- ...\n"
+    "## Challenge your analysis\n- ...\n"
 )
 
 
@@ -36,21 +38,21 @@ def test_well_formed_structured_response_conforms() -> None:
 
 
 def test_missing_section_is_flagged() -> None:
-    without_selfcritique = GOOD.replace("## Self-critique\n- ...\n", "")
-    report = check_structured(without_selfcritique)
+    without_challenge = GOOD.replace("## Challenge your analysis\n- ...\n", "")
+    report = check_structured(without_challenge)
     missing = [s.name for s in report.required_sections if not s.present]
-    assert "Self-critique" in missing
+    assert "Challenge your analysis" in missing
     assert not report.conforms()
 
 
 def test_missing_finding_field_is_flagged() -> None:
-    no_oracle = GOOD.replace(
-        "### 2. Slow dashboard\n- Observation — a\n- Oracle — b\n",
+    no_interpretation = GOOD.replace(
+        "### 2. Slow dashboard\n- Observation — a\n- Interpretation — b\n",
         "### 2. Slow dashboard\n- Observation — a\n",
     )
-    report = check_structured(no_oracle)
+    report = check_structured(no_interpretation)
     second = report.findings[1]
-    assert "Oracle" in second.missing_fields
+    assert "Interpretation" in second.missing_fields
     assert not report.conforms()
 
 
