@@ -145,10 +145,14 @@ def pseudonymize(
         Path | None,
         typer.Option("--output", "-o", help="Write here (default: <name>.pseudo.har)."),
     ] = None,
+    exclude: Annotated[
+        list[str] | None,
+        typer.Option("--exclude", help="Key(s) to leave untouched, e.g. a geoip 'city'."),
+    ] = None,
 ) -> None:
     """Replace domain PII (VINs, plates, IMEIs, UUIDs, addresses…) with synthetic data."""
     dest = output or har.with_name(f"{har.stem}.pseudo.har")
-    counts = pseudonymize_file(har, dest)
+    counts = pseudonymize_file(har, dest, exclude=frozenset(exclude or []))
     total = sum(counts.values())
     breakdown = ", ".join(f"{category}={n}" for category, n in sorted(counts.items())) or "nothing"
     typer.secho(
