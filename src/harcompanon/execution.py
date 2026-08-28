@@ -124,18 +124,22 @@ def retry_failed(
     fixture: Path,
     build: Callable[[str, str], Provider],
     *,
+    should_retry: Callable[[RunResponse], bool] | None = None,
     on_response: Callable[[RunResponse, int, int], None] | None = None,
 ) -> RunResult:
-    """Re-call only the errored (provider, mode) pairs of a run and return the patched result.
+    """Re-call the (provider, mode) pairs a run needs redone, and return the patched result.
 
-    ``build(provider_name, model)`` returns a ready provider. The fixture is re-preprocessed and
-    each failed pair's prompt re-rendered, so a transient server error can be back-filled into the
-    *same* run (rather than spawning a separate one). Successful responses are left as-is.
+    ``should_retry`` selects which responses to redo (default: only errored ones). The caller can
+    widen it — e.g. to also redo a structured response that came back missing sections (a truncated
+    or stunted answer). ``build(provider_name, model)`` returns a ready provider; the fixture is
+    re-preprocessed and each pair's prompt re-rendered, so the result is back-filled into the *same*
+    run rather than spawning a separate one. Responses that don't match are left as-is.
     """
+    should_retry = should_retry or (lambda r: bool(r.error))
     artifact_json = preprocess_file(fixture).to_canonical_json()
     prompts: dict[str, str] = {}
     responses = list(run.responses)
-    failed = [i for i, r in enumerate(responses) if r.error]
+    failed = [i for i, r in enumerate(responses) if should_retry(r)]
     for done, index in enumerate(failed, start=1):
         item = responses[index]
         prompt = prompts.setdefault(
