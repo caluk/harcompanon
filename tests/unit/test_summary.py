@@ -16,11 +16,13 @@ SAMPLE = Path(__file__).parents[1] / "data" / "sample.har"
 runner = CliRunner()
 
 STRUCTURED = (
+    "## Start here\n- lead\n"
     "## Findings\n"
-    "### 1. A\n- Observation — x\n- Oracle — y\n- Status — hypothesis\n"
-    "### 2. B\n- Observation — x\n- Oracle — y\n- Status — hypothesis\n"
+    "### 1. A\n- Observation — x\n- Interpretation — y\n- Oracle — z\n- Next investigation — n\n"
+    "### 2. B\n- Observation — x\n- Interpretation — y\n- Oracle — z\n- Next investigation — n\n"
+    "## Coverage and blind spots\n- c\n"
     "## Questions only a human can answer\n- q\n"
-    "## Self-critique\n- s\n"
+    "## Challenge your analysis\n- s\n"
 )
 
 
