@@ -76,8 +76,10 @@ def test_compare_html_is_a_matrix_with_all_cells() -> None:
     assert "Claude minimal" in page and "gpt minimal body" in page
     assert "RateLimitError: 429" in page  # the errored cell surfaces its error
     assert "err-cell" in page
-    # 2 modes -> the grid template repeats the column twice
-    assert "repeat(2," in page
+    # models are columns: 2 providers -> the grid repeats a fixed-width column twice
+    assert "repeat(2,440px)" in page
+    # a wider column width is honoured
+    assert "repeat(2,700px)" in compare_html(_run(), col_px=700)
 
 
 def test_cli_compare_writes_html(tmp_path: Path) -> None:

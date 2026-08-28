@@ -126,16 +126,21 @@ def _meta(item: RunResponse) -> str:
     return " · ".join(bits)
 
 
-def compare_html(run: RunResult) -> str:
-    """Build the full self-contained HTML page for a run's model x mode matrix."""
-    by = {(item.provider, item.mode): item for item in run.responses}
-    ncols = len(run.modes)
+def compare_html(run: RunResult, col_px: int = 440) -> str:
+    """Build the self-contained HTML page: models as columns, modes as rows.
 
-    header = "".join(f"<div class='col-head'>{html.escape(m)}</div>" for m in run.modes)
+    Reading *across a row* compares all models on the same prompt (scroll horizontally through
+    them); reading *down a column* compares a model's prompt modes. Columns are a fixed width so
+    the grid scrolls sideways — ``col_px`` (default 440) fits ~3 columns on a 14" laptop.
+    """
+    by = {(item.provider, item.mode): item for item in run.responses}
+    nproviders = len(run.providers)
+
+    header = "".join(f"<div class='col-head'>{html.escape(p)}</div>" for p in run.providers)
     grid_rows = [f"<div class='corner'>{html.escape(run.fixture)}</div>{header}"]
-    for provider in run.providers:
-        cells = [f"<div class='row-head'>{html.escape(provider)}</div>"]
-        for mode in run.modes:
+    for mode in run.modes:
+        cells = [f"<div class='row-head'>{html.escape(mode)}</div>"]
+        for provider in run.providers:
             item = by.get((provider, mode))
             if item is None:
                 cells.append("<div class='cell'><div class='body muted'>—</div></div>")
@@ -151,7 +156,8 @@ def compare_html(run: RunResult) -> str:
     grid = "".join(f"<div class='grid-row'>{row}</div>" for row in grid_rows)
     return (
         _PAGE.replace("__TITLE__", html.escape(run.run_id))
-        .replace("__COLS__", str(ncols))
+        .replace("__NCOL__", str(nproviders))
+        .replace("__COL__", str(col_px))
         .replace("__GRID__", grid)
     )
 
@@ -172,17 +178,16 @@ body{margin:0;color:var(--fg);background:var(--bg);
 font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 h1{font-size:15px;font-weight:600;margin:0;padding:10px 14px;border-bottom:1px solid var(--line)}
 .note{color:var(--muted);font-weight:400}
-.grid{width:100%}
-.grid-row{display:grid;grid-template-columns:150px repeat(__COLS__,minmax(320px,1fr))}
+.grid{overflow:auto;max-height:calc(100vh - 46px)}
+.grid-row{display:grid;grid-template-columns:120px repeat(__NCOL__,__COL__px);width:max-content}
 .col-head,.corner,.row-head{
 position:sticky;background:var(--head);font-weight:600;padding:8px 10px;
-border-bottom:1px solid var(--line);border-right:1px solid var(--line);z-index:1}
-.col-head{top:0;text-align:center}
-.corner{top:0;left:0;z-index:3}
-.row-head{left:0;display:flex;align-items:center;z-index:2}
-.grid-row:first-child .col-head{z-index:3}
+border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+.col-head{top:0;text-align:center;z-index:2}
+.corner{top:0;left:0;z-index:4}
+.row-head{left:0;display:flex;align-items:center;z-index:3}
 .cell{border-bottom:1px solid var(--line);border-right:1px solid var(--line);
-max-height:78vh;overflow:auto;padding:0 12px 12px}
+max-height:calc(100vh - 92px);overflow:auto;padding:0 12px 12px}
 .err-cell{background:color-mix(in srgb,var(--err) 8%,transparent)}
 .meta{position:sticky;top:0;background:var(--bg);color:var(--muted);font-size:12px;
 padding:6px 0;border-bottom:1px solid var(--line);margin-bottom:8px}

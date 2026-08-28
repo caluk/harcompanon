@@ -119,6 +119,37 @@ def run_benchmark(
     )
 
 
+def retry_failed(
+    run: RunResult,
+    fixture: Path,
+    build: Callable[[str, str], Provider],
+    *,
+    on_response: Callable[[RunResponse, int, int], None] | None = None,
+) -> RunResult:
+    """Re-call only the errored (provider, mode) pairs of a run and return the patched result.
+
+    ``build(provider_name, model)`` returns a ready provider. The fixture is re-preprocessed and
+    each failed pair's prompt re-rendered, so a transient server error can be back-filled into the
+    *same* run (rather than spawning a separate one). Successful responses are left as-is.
+    """
+    artifact_json = preprocess_file(fixture).to_canonical_json()
+    prompts: dict[str, str] = {}
+    responses = list(run.responses)
+    failed = [i for i, r in enumerate(responses) if r.error]
+    for done, index in enumerate(failed, start=1):
+        item = responses[index]
+        prompt = prompts.setdefault(
+            item.mode, render_prompt(item.mode, artifact_json, item.version)
+        )
+        result = _one(
+            build(item.provider, item.model), item.mode, item.version, prompt, dry_run=False
+        )
+        responses[index] = result
+        if on_response is not None:
+            on_response(result, done, len(failed))
+    return run.model_copy(update={"responses": responses})
+
+
 def _one(
     provider: Provider,
     mode: str,
