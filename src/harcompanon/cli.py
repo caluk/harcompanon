@@ -25,7 +25,7 @@ from harcompanon.providers.anthropic import DEFAULT_MAX_TOKENS
 from harcompanon.pseudonymize import pseudonymize_file
 from harcompanon.redact import redact_file
 from harcompanon.storage import load_run, store_run
-from harcompanon.structural_check import check_run, report_markdown
+from harcompanon.structural_check import check_run, check_structured, report_markdown
 from harcompanon.summary import load_runs, summarize
 
 app = typer.Typer(
@@ -287,11 +287,25 @@ def retry(
         typer.Option("--max-tokens", help="Max output tokens per response."),
     ] = DEFAULT_MAX_TOKENS,
 ) -> None:
-    """Re-run only a run's failed responses, back into the same run (fixes transient errors)."""
+    """Re-run a run's failed or incomplete responses, back into the same run.
+
+    "Incomplete" = an errored response, or a structured response missing required sections (a
+    truncated or stunted answer). Successful, complete responses are left untouched.
+    """
+
+    def needs_redo(r: RunResponse) -> bool:
+        if r.error:
+            return True
+        # A structured answer that lost whole sections (truncated at the token cap, or a model
+        # that quit after the lead) is unusable for comparison — redo it too.
+        if r.mode == "structured" and not r.dry_run:
+            return not check_structured(r.response.text).all_sections_present()
+        return False
+
     run = load_run(run_dir)
-    failed = [r for r in run.responses if r.error]
+    failed = [r for r in run.responses if needs_redo(r)]
     if not failed:
-        typer.secho("No errored responses to retry.", fg=typer.colors.GREEN, err=True)
+        typer.secho("Nothing to redo — all responses errored-free and complete.", err=True)
         return
 
     src = fixture or (Path("fixtures") / run.fixture)
@@ -303,18 +317,19 @@ def retry(
         )
         raise typer.Exit(code=2)
 
-    typer.secho(f"Retrying {len(failed)} failed response(s) in {run_dir}…", err=True)
+    typer.secho(f"Redoing {len(failed)} failed/incomplete response(s) in {run_dir}…", err=True)
     load_credentials()
     updated = retry_failed(
         run,
         src,
         lambda name, model: build_provider(name, model, max_tokens),
+        should_retry=needs_redo,
         on_response=_progress,
     )
     store_run(updated, run_dir.parent)
-    still = sum(1 for r in updated.responses if r.error)
+    still = sum(1 for r in updated.responses if needs_redo(r))
     typer.secho(
-        f"Retried -> {run_dir} ({still} still failing)",
+        f"Redone -> {run_dir} ({still} still failed/incomplete)",
         fg=typer.colors.RED if still else typer.colors.GREEN,
         err=True,
     )
