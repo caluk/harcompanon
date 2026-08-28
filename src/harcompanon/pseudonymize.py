@@ -11,8 +11,8 @@ monotonic history and manufacture a false "impossible mileage" finding).
 Two passes:
 - **key-based** — *string* values of configured PII keys inside JSON bodies are replaced. Some
   key classes collapse to one fixed, real-looking label instead of a gibberish scramble:
-  ``city`` → ``Berlin``, person names (``display_name`` …) → ``Antonio Banderas``, service/dealer
-  names → ``Lexus Service``. IP-valued keys become a valid-looking IPv4.
+  ``city`` → ``Berlin``, person names (``display_name`` …) → a synthetic English/German name,
+  service/dealer names → ``Lexus Service``. IP-valued keys become a valid-looking IPv4.
 - **pattern-based** — UUIDs and (letter-bearing) VINs are replaced wherever they appear (URL
   paths, ``_initiator.url``, the ``:path`` header, bodies). IPs and names learned from a key are
   additionally replaced *literally* wherever they recur (e.g. a client IP in a geoip URL path).
@@ -88,7 +88,95 @@ CITY_KEYS: frozenset[str] = frozenset({"city"})
 CITY_REPLACEMENT = "Berlin"
 #: Person full-name keys (NOT bare "name" — that is a place/POI name in map APIs).
 NAME_KEYS: frozenset[str] = frozenset({"display_name", "displayname", "fullname", "full_name"})
-NAME_REPLACEMENT = "Antonio Banderas"
+#: Person names become a synthetic but plausible English/German name — deterministic per real
+#: value (same real name → same fake), distinct per person (so the count of distinct people
+#: survives), and never a fixed label (a repeated name would read as scrubbed). Unlike an IP, a
+#: name is NOT replaced literally everywhere: that smears it into unrelated prose (Wikipedia text,
+#: photo attributions). Names are replaced only where they sit under a name *key* — including
+#: inside a JSON body inlined as an escaped string in an HTML document (see _replace_keyed_in_text).
+_FIRST_NAMES: tuple[str, ...] = (
+    "James",
+    "Emma",
+    "Thomas",
+    "Anna",
+    "Michael",
+    "Laura",
+    "David",
+    "Julia",
+    "Daniel",
+    "Sophie",
+    "Andreas",
+    "Marie",
+    "Peter",
+    "Sarah",
+    "Stefan",
+    "Lena",
+    "Markus",
+    "Katrin",
+    "Oliver",
+    "Hannah",
+    "Felix",
+    "Nina",
+    "Lucas",
+    "Emily",
+    "Jonas",
+    "Clara",
+    "Paul",
+    "Lisa",
+    "Max",
+    "Nora",
+    "Simon",
+    "Greta",
+    "Tobias",
+    "Mia",
+    "Florian",
+    "Ella",
+    "Sebastian",
+    "Ida",
+    "Benjamin",
+    "Charlotte",
+)
+_LAST_NAMES: tuple[str, ...] = (
+    "Smith",
+    "Müller",
+    "Jones",
+    "Schmidt",
+    "Brown",
+    "Fischer",
+    "Wilson",
+    "Weber",
+    "Taylor",
+    "Meyer",
+    "Wagner",
+    "Becker",
+    "Davies",
+    "Schulz",
+    "Hoffmann",
+    "Koch",
+    "Bauer",
+    "Richter",
+    "Klein",
+    "Wolf",
+    "Neumann",
+    "Schwarz",
+    "Zimmermann",
+    "Braun",
+    "Krüger",
+    "Hartmann",
+    "Lange",
+    "Werner",
+    "Krause",
+    "Lehmann",
+    "Walker",
+    "Roberts",
+    "Evans",
+    "Thompson",
+    "Baker",
+    "Turner",
+    "Vogel",
+    "Frank",
+    "Berg",
+)
 #: Service / dealer names (e.g. a car dealer's workshop).
 SERVICE_KEYS: frozenset[str] = frozenset(
     {"repairername", "dealername", "repairer_name", "dealer_name"}
@@ -100,6 +188,11 @@ IP_KEYS: frozenset[str] = frozenset({"ip", "ipaddress", "ip_address", "client_ip
 #: Strict IPv4 (each octet 0-255) so version strings like Chrome/149.0.0.0 don't match.
 _OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
 _IPV4 = re.compile(rf"{_OCTET}(?:\.{_OCTET}){{3}}")
+
+#: A ``"key": "value"`` pair in raw text — quotes optionally backslash-escaped, for a JSON body
+#: inlined as a string inside an HTML document. Group 1 = the ``"key":"`` prefix (kept verbatim),
+#: group 2 = the bare key, group 3 = the value. Used to scrub PII by key even where it never parses.
+_KEYED_FIELD = re.compile(r'(\\?"([A-Za-z0-9_]+)\\?"\s*:\s*\\?")([^"\\]{1,})')
 
 
 class Pseudonymizer:
@@ -149,6 +242,12 @@ class Pseudonymizer:
                 out.append(ch)
         return "".join(out)
 
+    def _fake_name(self, real: str) -> str:
+        """A plausible English/German full name, deterministic and distinct per real name."""
+        first = _FIRST_NAMES[self._digest("first", real)[0] % len(_FIRST_NAMES)]
+        last = _LAST_NAMES[self._digest("last", real)[1] % len(_LAST_NAMES)]
+        return f"{first} {last}"
+
     def _fake_ip(self, real: str) -> str:
         """A valid-looking IPv4 (octets 1-254), deterministic per real address."""
         octets = real.split(".")
@@ -164,7 +263,7 @@ class Pseudonymizer:
         if category == "city":
             synth = CITY_REPLACEMENT
         elif category == "name":
-            synth = NAME_REPLACEMENT
+            synth = self._fake_name(real)
         elif category == "service":
             synth = SERVICE_REPLACEMENT
         elif category == "ip":
@@ -181,9 +280,10 @@ class Pseudonymizer:
             synth = self._fake_generic(real)
         self._map[real] = synth
         self._synth_values.add(synth)
-        # IPs and names also appear outside JSON keys (URL paths, free text) — remember them so the
-        # deep pass can replace the exact real value literally wherever it shows up.
-        if category in ("ip", "name"):
+        # An IP also appears outside JSON keys (a geoip URL path) but never inside prose, so it is
+        # safe to replace literally everywhere. Names are deliberately NOT literal-replaced (that
+        # smears them into unrelated prose) — they are handled key-based, including in text.
+        if category == "ip":
             self._literals[real] = synth
         self.counts[category] += 1
         return synth
@@ -254,11 +354,11 @@ class Pseudonymizer:
         if isinstance(obj, list):
             return [self.apply_patterns_deep(item) for item in obj]
         if isinstance(obj, str):
-            return self._apply_literals(self.replace_patterns(obj))
+            return self._replace_keyed_in_text(self._apply_literals(self.replace_patterns(obj)))
         return obj
 
     def _apply_literals(self, text: str) -> str:
-        """Replace each known real IP/name literal wherever it appears (URL paths, free text).
+        """Replace each known real IP literal wherever it appears (e.g. a geoip URL path).
 
         Boundary-guarded so an IP isn't matched inside a longer number (e.g. ``77.0.27.172`` must
         not fire inside ``77.0.27.1720``). Only exact learned values are touched — never a pattern
@@ -268,6 +368,22 @@ class Pseudonymizer:
             if real in text:
                 text = re.sub(rf"(?<![\w.]){re.escape(real)}(?![\w.])", synth, text)
         return text
+
+    def _replace_keyed_in_text(self, text: str) -> str:
+        """Replace ``"<pii-key>": "<value>"`` values inside raw text — even escaped JSON in HTML.
+
+        A page can inline its state as a JSON *string* (``\\"display_name\\":\\"…\\"``) that never
+        parses as a body. This catches the value by its key, so a name is scrubbed there too — but,
+        crucially, only where it sits under a key. A name appearing in prose (Wikipedia text, photo
+        attributions) has no such key, so it is left untouched.
+        """
+        return _KEYED_FIELD.sub(self._keyed_sub, text)
+
+    def _keyed_sub(self, match: re.Match[str]) -> str:
+        category = self._key_category(match.group(2).lower(), match.group(3))
+        if category is None:
+            return match.group(0)
+        return match.group(1) + self._synth(match.group(3), category)
 
     def process_body(self, text: str) -> str:
         try:
