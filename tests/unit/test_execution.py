@@ -122,9 +122,32 @@ def test_retry_only_touches_failed_responses() -> None:
     assert patched.responses[1].response.text
 
 
+def test_retry_redoes_responses_matching_predicate() -> None:
+    from harcompanon.execution import retry_failed
+
+    result = run_benchmark(SAMPLE, [FakeProvider()], ["minimal", "structured"])
+    # One response is "complete"; the other is an incomplete stub the predicate flags for redo.
+    done = result.responses[0].model_copy(
+        update={"response": result.responses[0].response.model_copy(update={"text": "COMPLETE"})}
+    )
+    stub = result.responses[1].model_copy(
+        update={"response": result.responses[1].response.model_copy(update={"text": "stub"})}
+    )
+    result = result.model_copy(update={"responses": [done, stub]})
+
+    patched = retry_failed(
+        result,
+        SAMPLE,
+        lambda name, model: FakeProvider(),
+        should_retry=lambda r: "COMPLETE" not in r.response.text,
+    )
+    assert patched.responses[0].response.text == "COMPLETE"  # complete one kept
+    assert patched.responses[1].response.text.startswith("seen ")  # incomplete one redone
+
+
 def test_cli_retry_noop_when_clean(tmp_path: Path) -> None:
     result = run_benchmark(SAMPLE, [FakeProvider()], ["minimal"])
     run_dir = store_run(result, tmp_path)
     out = runner.invoke(app, ["retry", str(run_dir)])
     assert out.exit_code == 0, out.output
-    assert "No errored responses" in out.output
+    assert "Nothing to redo" in out.output
