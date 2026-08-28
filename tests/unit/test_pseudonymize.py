@@ -57,6 +57,14 @@ def test_generic_key_scramble_preserves_character_classes() -> None:
     assert synth[:2].isupper() and synth[6:].isdigit()
 
 
+def test_exclude_leaves_a_key_untouched() -> None:
+    # A geoip city would normally collapse to "Berlin", but excluding it keeps the real value so
+    # it stays consistent with the sibling coordinates (no manufactured location contradiction).
+    excluded = Pseudonymizer(exclude=frozenset({"city"}))
+    assert excluded._key_category("city", "Hamburg") is None
+    assert Pseudonymizer()._key_category("city", "Hamburg") == "city"  # default still remaps
+
+
 def test_city_keys_collapse_to_one_real_looking_city() -> None:
     # Cities become a plausible fixed name (not gibberish), so a companion doesn't detect scrubbing.
     p = Pseudonymizer()
