@@ -1,16 +1,18 @@
 {
   "mode": "structured",
-  "version": "v1",
+  "version": "v2",
   "format": "markdown",
   "required_sections": [
+    "Start here",
     "Findings",
+    "Coverage and blind spots",
     "Questions only a human can answer",
-    "Self-critique"
+    "Challenge your analysis"
   ],
   "finding_fields": [
     "Observation",
-    "Oracle",
-    "Status"
+    "Interpretation",
+    "Next investigation"
   ],
-  "notes": "Structural spec for the `structured` prompt's output. The structural check (harcompanon-fvt4) mechanically verifies that these section headings are present and that findings name Observation, Oracle, and Status. It is a presence/conformance check only — POST-PROCESSING, never a judgment of quality. The human is the sole judge."
+  "notes": "Structural spec for the `structured` (v2) prompt's output. The structural check mechanically verifies these section headings are present and that each finding names the required *invariants* — Observation, Interpretation, Next investigation. Oracle, Risk and Status are deliberately OPTIONAL in the prompt ('when useful'), so they are not required here: requiring them would turn testing into checklist completion. This is a presence/conformance check only — POST-PROCESSING, never a judgment of quality. The human is the sole judge."
 }

@@ -23,7 +23,7 @@ def test_available_modes_includes_the_three_tiers() -> None:
 
 def test_minimal_is_bare() -> None:
     text = load_template("minimal")
-    assert "What looks strange here?" in text
+    assert "What do you notice?" in text  # neutral probe, not risk-primed
     # Bare: no role framing, no imposed structure.
     assert "session-based" not in text
     assert "## Findings" not in text
@@ -60,12 +60,19 @@ def test_unknown_version_raises() -> None:
 
 def test_structured_has_required_sections_and_oracle() -> None:
     text = load_template("structured")
-    for section in ("## Findings", "## Questions only a human can answer", "## Self-critique"):
+    for section in (
+        "## Start here",
+        "## Findings",
+        "## Coverage and blind spots",
+        "## Questions only a human can answer",
+        "## Challenge your analysis",
+    ):
         assert section in text
+    # Required per-finding invariants; Oracle offered as a lens ("when useful").
+    assert "Observation" in text and "Interpretation" in text and "Next investigation" in text
     assert "Oracle" in text
-    assert "hypotheses, not findings" in text
-    # RST-safe framing: instrument, not the tester/judge.
-    assert "not the tester" in text
+    # RST-safe framing: instrument, and the human is the judge.
+    assert "instrument" in text and "human tester is the judge" in text
 
 
 def test_structured_spec_matches_the_template() -> None:
