@@ -105,8 +105,14 @@ _IPV4 = re.compile(rf"{_OCTET}(?:\.{_OCTET}){{3}}")
 class Pseudonymizer:
     """Builds a consistent real→synthetic mapping and applies it (format-preserving)."""
 
-    def __init__(self, pii_keys: frozenset[str] = DEFAULT_PII_KEYS) -> None:
+    def __init__(
+        self, pii_keys: frozenset[str] = DEFAULT_PII_KEYS, exclude: frozenset[str] = frozenset()
+    ) -> None:
         self.pii_keys = {k.lower() for k in pii_keys}
+        #: Keys to leave untouched even if they'd otherwise be synthesized — e.g. skip a geoip
+        #: ``city`` so it isn't remapped to "Berlin" while the sibling coordinates stay, which
+        #: would manufacture a false location contradiction the companion then "finds".
+        self.exclude = {k.lower() for k in exclude}
         self._map: dict[str, str] = {}
         self._synth_values: set[str] = set()  # outputs we produced — never re-map them
         #: real→synth for values that must ALSO be replaced literally wherever they appear
@@ -184,7 +190,7 @@ class Pseudonymizer:
 
     def _key_category(self, key_l: str, value: Any) -> str | None:
         """Which synthesis category applies to this key/value, or None to leave it untouched."""
-        if not isinstance(value, str) or not value:
+        if not isinstance(value, str) or not value or key_l in self.exclude:
             return None
         if key_l in NAME_KEYS:
             return "name"
@@ -272,14 +278,17 @@ class Pseudonymizer:
 
 
 def pseudonymize_file(
-    path: Path, output: Path, pii_keys: frozenset[str] = DEFAULT_PII_KEYS
+    path: Path,
+    output: Path,
+    pii_keys: frozenset[str] = DEFAULT_PII_KEYS,
+    exclude: frozenset[str] = frozenset(),
 ) -> Counter[str]:
     """Write a pseudonymized copy of ``path`` to ``output``; return per-category counts."""
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"{path} is not a valid HAR file (expected a top-level JSON object).")
 
-    p = Pseudonymizer(pii_keys)
+    p = Pseudonymizer(pii_keys, exclude)
     log = raw.get("log")
     raw_entries = log.get("entries") if isinstance(log, dict) else None
     entries: list[Any] = raw_entries if isinstance(raw_entries, list) else []
