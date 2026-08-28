@@ -15,6 +15,7 @@ import typer
 
 from harcompanon import __version__
 from harcompanon.closeout import generate_closeout
+from harcompanon.compare import compare_html
 from harcompanon.config import build_provider, load_credentials
 from harcompanon.execution import RunResponse, run_benchmark
 from harcompanon.judgment import generate_judgment
@@ -238,6 +239,28 @@ def run(
     )
     if not dry_run and total_cost:
         typer.secho(f"Total cost: ${total_cost:.4f}", fg=typer.colors.GREEN, err=True)
+
+
+@app.command()
+def compare(
+    run_dir: Annotated[
+        Path,
+        typer.Argument(exists=True, file_okay=False, help="A run directory (contains run.json)."),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Write the HTML here (default: <run>/compare.html)."),
+    ] = None,
+) -> None:
+    """Render the run as a self-contained HTML matrix (models x modes) for side-by-side reading."""
+    run = load_run(run_dir)
+    dest = output or (run_dir / "compare.html")
+    dest.write_text(compare_html(run), encoding="utf-8")
+    typer.secho(
+        f"Comparison matrix ({len(run.providers)} model(s) x {len(run.modes)} mode(s)) -> {dest}",
+        fg=typer.colors.GREEN,
+        err=True,
+    )
 
 
 @app.command()
