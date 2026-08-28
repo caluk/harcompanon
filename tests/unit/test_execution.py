@@ -103,3 +103,28 @@ def test_cli_run_rejects_unknown_mode(tmp_path: Path) -> None:
     )
     assert result.exit_code == 2
     assert "Unknown mode" in result.output
+
+
+def test_retry_only_touches_failed_responses() -> None:
+    from harcompanon.execution import retry_failed
+
+    result = run_benchmark(SAMPLE, [FakeProvider(boom=True)], ["minimal", "structured"])
+    assert all(r.error for r in result.responses)  # both failed (no network)
+    # Pretend the first one had actually succeeded on the original run.
+    kept = result.responses[0].response.model_copy(update={"text": "KEEP ME"})
+    ok = result.responses[0].model_copy(update={"error": None, "response": kept})
+    result = result.model_copy(update={"responses": [ok, result.responses[1]]})
+
+    patched = retry_failed(result, SAMPLE, lambda name, model: FakeProvider())
+    assert patched.run_id == result.run_id  # same run identity
+    assert patched.responses[0].response.text == "KEEP ME"  # success left untouched
+    assert patched.responses[1].error is None  # failure re-run and fixed
+    assert patched.responses[1].response.text
+
+
+def test_cli_retry_noop_when_clean(tmp_path: Path) -> None:
+    result = run_benchmark(SAMPLE, [FakeProvider()], ["minimal"])
+    run_dir = store_run(result, tmp_path)
+    out = runner.invoke(app, ["retry", str(run_dir)])
+    assert out.exit_code == 0, out.output
+    assert "No errored responses" in out.output
