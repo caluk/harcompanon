@@ -213,6 +213,10 @@ def run(
         bool,
         typer.Option("--dry-run/--live", help="Render prompts without calling any API."),
     ] = False,
+    backend: Annotated[
+        str,
+        typer.Option("--backend", help="'native' (vendor SDKs) or 'litellm' (opt-in)."),
+    ] = "native",
 ) -> None:
     """Run one fixture across the chosen providers x prompt modes (stateless API calls)."""
     mode_list = [m.strip() for m in modes.split(",") if m.strip()]
@@ -229,7 +233,7 @@ def run(
     provider_names = providers or ["anthropic"]
     if not dry_run:
         load_credentials()
-    built = [build_provider(name, model, max_tokens) for name in provider_names]
+    built = [build_provider(name, model, max_tokens, backend) for name in provider_names]
 
     result = run_benchmark(fixture, built, mode_list, dry_run=dry_run, on_response=_progress)
     run_dir = store_run(result, out)
@@ -286,6 +290,10 @@ def retry(
         int,
         typer.Option("--max-tokens", help="Max output tokens per response."),
     ] = DEFAULT_MAX_TOKENS,
+    backend: Annotated[
+        str,
+        typer.Option("--backend", help="'native' or 'litellm' (match how the run was made)."),
+    ] = "native",
 ) -> None:
     """Re-run a run's failed or incomplete responses, back into the same run.
 
@@ -322,7 +330,7 @@ def retry(
     updated = retry_failed(
         run,
         src,
-        lambda name, model: build_provider(name, model, max_tokens),
+        lambda name, model: build_provider(name, model, max_tokens, backend),
         should_retry=needs_redo,
         on_response=_progress,
     )
