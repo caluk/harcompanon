@@ -85,6 +85,11 @@ harcompanon closeout runs/<run-id>
 You supply your own HAR — capture one from a site you're testing (DevTools → Network →
 "Save all as HAR"), then `redact` (and `pseudonymize` if it holds domain PII) before use.
 
+> **Optional, for fun:** an experimental `--backend litellm` routes every provider through
+> [LiteLLM](https://github.com/BerriAI/litellm) instead of the vendor SDKs (`pip install -e ".[litellm]"`).
+> It's a learning exercise, not a core dependency — the default `--backend native` is the supported
+> path. See [docs/litellm-backend.md](docs/litellm-backend.md).
+
 ## Fixtures
 
 Frozen HAR captures live in [`fixtures/`](fixtures) and are **git-ignored by default** — no
