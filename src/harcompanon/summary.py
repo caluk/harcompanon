@@ -33,7 +33,7 @@ def load_runs(paths: list[Path]) -> list[RunResult]:
 
 def _structured_metrics(item: RunResponse) -> tuple[int, int, str]:
     """(findings, oracles_named, conforms) for a structured response; blanks otherwise."""
-    report = check_structured(item.response.text)
+    report = check_structured(item.response.text, version=item.version)
     findings = len(report.findings)
     oracles = sum(1 for finding in report.findings if "Oracle" not in finding.missing_fields)
     return findings, oracles, "yes" if report.conforms() else "no"

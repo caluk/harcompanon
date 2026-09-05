@@ -1,0 +1,18 @@
+{
+  "mode": "structured",
+  "version": "v3",
+  "format": "markdown",
+  "required_sections": [
+    "Overall picture",
+    "Findings",
+    "Coverage and blind spots",
+    "Questions only a human can answer",
+    "Challenge your analysis"
+  ],
+  "finding_fields": [
+    "Observation",
+    "Interpretation",
+    "Next investigation"
+  ],
+  "notes": "Structural spec for the `structured` (v3) prompt's output. v3 replaces v2's `Start here` (which restated findings with poor risk rating) with `Overall picture` — a short, descriptive product/session model that orients the tester and grounds the findings. v3 also adds a `Systemic observations` section for pervasive properties, but that section is CONDITIONAL (only when the evidence actually shows such a property), so it is deliberately NOT required here — requiring it would turn testing into checklist completion, and reward a manufactured entry. As in v2, Oracle/Risk/Status remain optional per-finding, and only the invariants Observation/Interpretation/Next investigation are required. Presence/conformance check only — POST-PROCESSING, never a judgment of quality. The human is the sole judge."
+}
