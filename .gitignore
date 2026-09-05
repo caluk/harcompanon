@@ -230,8 +230,9 @@ __marimo__/
 # Private working notes for the article — draft material, kept local, never published to the repo.
 /ARTICLE_NOTES.md
 
-# Local-only HAR captures. Real/personal captures live in fixtures/ for local dev but must
-# never be committed. Everything in fixtures/ is ignored by default (including .redacted.har
-# and .pseudo.har outputs). No fixtures are currently tracked. To commit a safe/public one,
-# add a matching "!/fixtures/<name>.har" line below.
+# Local-only HAR captures and screenshots. Real/personal captures live in fixtures/ for local
+# dev but must never be committed. HAR files (including .redacted.har and .pseudo.har outputs)
+# and screenshots (.png) are ignored by default. To commit a safe/public one, add a matching
+# "!/fixtures/<name>.har" (or ".png") line below.
 /fixtures/*.har
+/fixtures/*.png
