@@ -227,6 +227,9 @@ __marimo__/
 # macOS Finder cruft
 .DS_Store
 
+# Private working notes for the article — draft material, kept local, never published to the repo.
+/ARTICLE_NOTES.md
+
 # Local-only HAR captures. Real/personal captures live in fixtures/ for local dev but must
 # never be committed. Everything in fixtures/ is ignored by default (including .redacted.har
 # and .pseudo.har outputs). No fixtures are currently tracked. To commit a safe/public one,

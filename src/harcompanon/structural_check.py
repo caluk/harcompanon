@@ -75,9 +75,11 @@ def _finding_blocks(text: str) -> list[tuple[str, str]]:
     return blocks
 
 
-def check_structured(text: str, spec: dict[str, Any] | None = None) -> StructuralReport:
-    """Mechanically check a structured response's shape against the spec."""
-    spec = spec or load_structured_spec()
+def check_structured(
+    text: str, spec: dict[str, Any] | None = None, version: str = "v2"
+) -> StructuralReport:
+    """Mechanically check a structured response's shape against the spec for ``version``."""
+    spec = spec or load_structured_spec(version)
     required_sections = [str(s) for s in spec.get("required_sections", [])]
     finding_fields = [str(f) for f in spec.get("finding_fields", [])]
 
@@ -101,12 +103,15 @@ def check_structured(text: str, spec: dict[str, Any] | None = None) -> Structura
 
 
 def check_run(run: RunResult) -> list[tuple[RunResponse, StructuralReport]]:
-    """Run the structural check over each *structured* response (other modes have no schema)."""
-    spec = load_structured_spec()
+    """Run the structural check over each *structured* response (other modes have no schema).
+
+    Each response is checked against the spec for *its own* prompt version, so a v2 and a v3
+    response in the same run are each judged by the shape their prompt actually asked for.
+    """
     results: list[tuple[RunResponse, StructuralReport]] = []
     for item in run.responses:
         if item.mode == "structured":
-            results.append((item, check_structured(item.response.text, spec)))
+            results.append((item, check_structured(item.response.text, version=item.version)))
     return results
 
 
