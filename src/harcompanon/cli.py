@@ -217,6 +217,10 @@ def run(
         str,
         typer.Option("--backend", help="'native' (vendor SDKs) or 'litellm' (opt-in)."),
     ] = "native",
+    prompt_version: Annotated[
+        str,
+        typer.Option("--prompt-version", help="Prompt template version to render (e.g. v2, v3)."),
+    ] = "v2",
 ) -> None:
     """Run one fixture across the chosen providers x prompt modes (stateless API calls)."""
     mode_list = [m.strip() for m in modes.split(",") if m.strip()]
@@ -235,7 +239,9 @@ def run(
         load_credentials()
     built = [build_provider(name, model, max_tokens, backend) for name in provider_names]
 
-    result = run_benchmark(fixture, built, mode_list, dry_run=dry_run, on_response=_progress)
+    result = run_benchmark(
+        fixture, built, mode_list, version=prompt_version, dry_run=dry_run, on_response=_progress
+    )
     run_dir = store_run(result, out)
 
     errors = sum(1 for r in result.responses if r.error)
@@ -307,7 +313,7 @@ def retry(
         # A structured answer that lost whole sections (truncated at the token cap, or a model
         # that quit after the lead) is unusable for comparison — redo it too.
         if r.mode == "structured" and not r.dry_run:
-            return not check_structured(r.response.text).all_sections_present()
+            return not check_structured(r.response.text, version=r.version).all_sections_present()
         return False
 
     run = load_run(run_dir)
