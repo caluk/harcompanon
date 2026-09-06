@@ -16,16 +16,13 @@ import time
 
 from harcompanon.providers.base import RawResponse, estimate_cost
 
-DEFAULT_MODEL = "gemini-2.5-pro"
-DEFAULT_MAX_TOKENS = 16000
-
 
 class GeminiProvider:
     """Calls Gemini via ``google-genai`` (reads GEMINI_API_KEY or GOOGLE_API_KEY from env)."""
 
     name = "gemini"
 
-    def __init__(self, model: str = DEFAULT_MODEL, max_tokens: int = DEFAULT_MAX_TOKENS) -> None:
+    def __init__(self, model: str, max_tokens: int) -> None:
         self.model = model
         self.max_tokens = max_tokens
 
