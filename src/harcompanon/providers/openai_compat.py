@@ -3,6 +3,12 @@
 DeepSeek, Mistral, and Moonshot (Kimi) all expose an OpenAI-compatible ``chat/completions``
 endpoint, so one class parameterised by base URL + key env var covers them all. Stateless,
 no temperature (model default), SDK imported lazily — same shape as the other providers.
+
+Reasoning: DeepSeek V4 and Kimi K3 reason ON by default, so no reasoning flag is sent here (the
+shared endpoint doesn't take a uniform reasoning parameter, and passing an unsupported one would
+400). Mistral Large has no reasoning mode and therefore stays non-reasoning — the one documented
+exception in the otherwise reasoning-equalized configuration. Where the API reports a reasoning
+token breakdown (``completion_tokens_details.reasoning_tokens``), it is captured for comparability.
 """
 
 from __future__ import annotations
@@ -53,6 +59,10 @@ class OpenAICompatProvider:
         usage = getattr(completion, "usage", None)
         input_tokens = getattr(usage, "prompt_tokens", None)
         output_tokens = getattr(usage, "completion_tokens", None)
+        # Reasoners (DeepSeek, Kimi) fold reasoning into completion_tokens; capture the breakdown
+        # when the API exposes it so counts stay comparable with the other providers.
+        details = getattr(usage, "completion_tokens_details", None)
+        reasoning_tokens = getattr(details, "reasoning_tokens", None)
         model = getattr(completion, "model", self.model)
         return RawResponse(
             provider=self.name,
@@ -60,6 +70,7 @@ class OpenAICompatProvider:
             text=text,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            reasoning_tokens=reasoning_tokens,
             cost_usd=estimate_cost(model, input_tokens, output_tokens),
             latency_ms=latency_ms,
             stop_reason=stop_reason,
