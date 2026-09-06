@@ -51,15 +51,18 @@ _REGISTRY: dict[str, Callable[[str, int], Provider]] = {
 }
 
 #: name -> default model id used when the caller doesn't override it.
-#: Each is the provider's current *flagship* (verified live 2026-08-27); override per account
-#: with --model. Gemini Pro and DeepSeek/Kimi require a funded account; Mistral Large and the
-#: Gemini free tier (Flash) do not.
+#: Pinned to FIXED, concrete versions for strict reproducibility — deliberately NO floating
+#: "-latest" aliases. The two aliases the study originally ran (``gemini-pro-latest``,
+#: ``mistral-large-latest``) are frozen here to the concrete versions they pointed at during the
+#: runs, resolved live on 2026-09-06 (gemini via the response ``modelVersion``; mistral via the
+#: ``/v1/models`` alias mapping). Override per account with --model. Gemini Pro and DeepSeek/Kimi
+#: require a funded account; Mistral Large needs a subscription tier that permits it.
 DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-opus-4-8",
     "openai": "gpt-5.2",
-    "gemini": "gemini-pro-latest",
+    "gemini": "gemini-3.1-pro-preview",
     "deepseek": "deepseek-v4-pro",
-    "mistral": "mistral-large-latest",
+    "mistral": "mistral-large-2512",
     "kimi": "kimi-k3",
 }
 
