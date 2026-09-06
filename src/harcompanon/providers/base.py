@@ -45,6 +45,10 @@ class RawResponse(BaseModel):
     text: str
     input_tokens: int | None = None
     output_tokens: int | None = None
+    #: Reasoning/"thinking" tokens, when the provider reports them separately. Captured so the
+    #: token counts are comparable across providers that account for reasoning differently
+    #: (some fold it into output_tokens; Gemini reports it apart as thoughts). None = not reported.
+    reasoning_tokens: int | None = None
     cost_usd: float | None = None
     latency_ms: float = 0.0
     stop_reason: str | None = None
