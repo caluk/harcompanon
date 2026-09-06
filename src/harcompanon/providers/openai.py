@@ -1,8 +1,9 @@
 """OpenAI provider — same Provider protocol as Anthropic, different SDK.
 
-Stateless single-shot call via the Responses API. No temperature (kept at the model default,
-matching the Anthropic provider for cross-provider comparability). The SDK is imported lazily
-so --dry-run and tests need neither the package nor a key.
+Stateless single-shot call via the Responses API. No temperature (model default, for
+comparability). Reasoning is set to ``effort: "high"`` so it is ON and generous, matching the
+other providers in the equalized-reasoning configuration. The SDK is imported lazily so
+--dry-run and tests need neither the package nor a key.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ class OpenAIProvider:
             model=self.model,
             input=prompt,
             max_output_tokens=self.max_tokens,
+            reasoning={"effort": "high"},  # reasoning ON, generous (equalized config)
         )
         latency_ms = (time.monotonic() - started) * 1000
 
@@ -40,6 +42,9 @@ class OpenAIProvider:
         usage = getattr(response, "usage", None)
         input_tokens = getattr(usage, "input_tokens", None)
         output_tokens = getattr(usage, "output_tokens", None)
+        # Responses API folds reasoning into output_tokens; the split is in output_tokens_details.
+        details = getattr(usage, "output_tokens_details", None)
+        reasoning_tokens = getattr(details, "reasoning_tokens", None)
         model = getattr(response, "model", self.model)
         return RawResponse(
             provider=self.name,
@@ -47,6 +52,7 @@ class OpenAIProvider:
             text=text,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            reasoning_tokens=reasoning_tokens,
             cost_usd=estimate_cost(model, input_tokens, output_tokens),
             latency_ms=latency_ms,
             stop_reason=getattr(response, "status", None),
