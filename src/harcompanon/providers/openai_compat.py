@@ -18,8 +18,6 @@ import time
 
 from harcompanon.providers.base import RawResponse, estimate_cost
 
-DEFAULT_MAX_TOKENS = 16000
-
 
 class OpenAICompatProvider:
     """Calls an OpenAI-compatible chat API at ``base_url`` using ``api_key_env`` from the env."""
@@ -30,7 +28,7 @@ class OpenAICompatProvider:
         base_url: str,
         api_key_env: str,
         model: str,
-        max_tokens: int = DEFAULT_MAX_TOKENS,
+        max_tokens: int,
     ) -> None:
         self.name = name
         self.base_url = base_url

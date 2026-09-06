@@ -16,12 +16,11 @@ import typer
 from harcompanon import __version__
 from harcompanon.closeout import generate_closeout
 from harcompanon.compare import compare_html
-from harcompanon.config import build_provider, load_credentials
+from harcompanon.config import DEFAULT_MAX_TOKENS, build_provider, load_credentials
 from harcompanon.execution import RunResponse, retry_failed, run_benchmark
 from harcompanon.judgment import generate_judgment
 from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
 from harcompanon.prompts import available_modes
-from harcompanon.providers.anthropic import DEFAULT_MAX_TOKENS
 from harcompanon.pseudonymize import pseudonymize_file
 from harcompanon.redact import redact_file
 from harcompanon.storage import load_run, store_run
