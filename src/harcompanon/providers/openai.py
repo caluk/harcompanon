@@ -12,16 +12,13 @@ import time
 
 from harcompanon.providers.base import RawResponse, estimate_cost
 
-DEFAULT_MODEL = "gpt-5"
-DEFAULT_MAX_TOKENS = 16000
-
 
 class OpenAIProvider:
     """Calls OpenAI via the official ``openai`` SDK (reads OPENAI_API_KEY from env)."""
 
     name = "openai"
 
-    def __init__(self, model: str = DEFAULT_MODEL, max_tokens: int = DEFAULT_MAX_TOKENS) -> None:
+    def __init__(self, model: str, max_tokens: int) -> None:
         self.model = model
         self.max_tokens = max_tokens
 

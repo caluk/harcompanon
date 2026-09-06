@@ -13,16 +13,13 @@ import time
 
 from harcompanon.providers.base import RawResponse, estimate_cost
 
-DEFAULT_MODEL = "claude-opus-4-8"
-DEFAULT_MAX_TOKENS = 16000
-
 
 class AnthropicProvider:
     """Calls Claude via the official ``anthropic`` SDK (reads ANTHROPIC_API_KEY from env)."""
 
     name = "anthropic"
 
-    def __init__(self, model: str = DEFAULT_MODEL, max_tokens: int = DEFAULT_MAX_TOKENS) -> None:
+    def __init__(self, model: str, max_tokens: int) -> None:
         self.model = model
         self.max_tokens = max_tokens
 

@@ -19,7 +19,6 @@ from harcompanon.providers import (
     OpenAIProvider,
     Provider,
 )
-from harcompanon.providers.anthropic import DEFAULT_MAX_TOKENS
 
 
 def _deepseek(model: str, max_tokens: int) -> Provider:
@@ -65,6 +64,12 @@ DEFAULT_MODELS: dict[str, str] = {
     "mistral": "mistral-large-2512",
     "kimi": "kimi-k3",
 }
+
+#: Default output-token budget when the caller doesn't override it (--max-tokens). The single
+#: source of truth for this value. Set generously because reasoning is ON by default across
+#: providers: a lower cap (the old 16000) truncated reasoning models mid-response — reasoning
+#: tokens plus the answer overran it — so the default must leave room for both.
+DEFAULT_MAX_TOKENS = 32000
 
 
 def load_credentials() -> None:

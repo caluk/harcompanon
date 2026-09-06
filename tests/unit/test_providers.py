@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from harcompanon.config import DEFAULT_MODELS, available_providers, build_provider
+from harcompanon.config import (
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_MODELS,
+    available_providers,
+    build_provider,
+)
 from harcompanon.providers import (
     AnthropicProvider,
     GeminiProvider,
@@ -36,10 +41,11 @@ def test_registry_builds_anthropic_with_default_model() -> None:
     assert build_provider("anthropic", model="claude-haiku-4-5").model == "claude-haiku-4-5"
 
 
-def test_max_tokens_is_configurable_and_defaults_to_16000() -> None:
+def test_max_tokens_is_configurable_and_defaults_to_32000() -> None:
     default = build_provider("anthropic")
     custom = build_provider("anthropic", max_tokens=64000)
-    assert isinstance(default, AnthropicProvider) and default.max_tokens == 16000
+    assert isinstance(default, AnthropicProvider) and default.max_tokens == DEFAULT_MAX_TOKENS
+    assert default.max_tokens == 32000
     assert isinstance(custom, AnthropicProvider) and custom.max_tokens == 64000
 
 
@@ -79,7 +85,7 @@ def test_unknown_provider_raises() -> None:
 
 def test_anthropic_provider_satisfies_protocol() -> None:
     # runtime_checkable Protocol: name, model, complete().
-    assert isinstance(AnthropicProvider(), Provider)
+    assert isinstance(AnthropicProvider("claude-opus-4-8", 32000), Provider)
 
 
 def test_raw_response_round_trips() -> None:
