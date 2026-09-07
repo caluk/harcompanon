@@ -33,11 +33,6 @@ dev = [
     "mypy>=1.11",
     "pytest>=8.0",
 ]
-# Optional, exploratory: route all providers through LiteLLM instead of the vendor SDKs.
-# Not needed for normal use — see docs/litellm-backend.md. Install with: pip install -e ".[litellm]"
-litellm = [
-    "litellm>=1.40",
-]
 
 [project.urls]
 Homepage = "https://github.com/caluk/harcompanon"
@@ -69,11 +64,6 @@ python_version = "3.11"
 strict = true
 files = ["src", "tests"]
 plugins = ["pydantic.mypy"]
-
-# LiteLLM is an optional, untyped extra; don't fail the strict gate when it isn't installed.
-[[tool.mypy.overrides]]
-module = "litellm.*"
-ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
