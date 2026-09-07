@@ -51,10 +51,8 @@ packages = ["src/harcompanon"]
 line-length = 100
 target-version = "py311"
 src = ["src", "tests"]
-# Ruff formats Python code blocks inside .md. Keep it away from prose markdown whose snippets
-# are illustrative, not canonical code: machine-owned bean files, and docs/ (hand-written
-# examples that shouldn't have to survive the formatter).
-extend-exclude = [".beans", "docs"]
+# Ruff formats Python code blocks inside .md; keep it away from the machine-owned bean files.
+extend-exclude = [".beans"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]

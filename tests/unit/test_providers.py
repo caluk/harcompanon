@@ -17,20 +17,7 @@ from harcompanon.providers import (
     OpenAIProvider,
     Provider,
     RawResponse,
-    estimate_cost,
 )
-
-
-def test_estimate_cost_known_and_unknown() -> None:
-    # claude-opus-4-8 is $5/$25 per 1M tokens.
-    assert estimate_cost("claude-opus-4-8", 1_000_000, 1_000_000) == pytest.approx(30.0)
-    assert estimate_cost("claude-opus-4-8", None, 10) is None
-    assert estimate_cost("some-unpriced-model", 100, 100) is None
-
-
-def test_estimate_cost_normalizes_dated_model_id() -> None:
-    # The API can return a dated snapshot; pricing is keyed on the alias.
-    assert estimate_cost("claude-haiku-4-5-20251001", 1_000_000, 1_000_000) == pytest.approx(6.0)
 
 
 def test_registry_builds_anthropic_with_default_model() -> None:
