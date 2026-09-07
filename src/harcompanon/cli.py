@@ -170,9 +170,8 @@ def _progress(r: RunResponse, done: int, total: int) -> None:
         typer.secho(f"{head}  ✗ {r.error[:80]}", fg=typer.colors.RED, err=True)
         return
     secs = r.response.latency_ms / 1000
-    cost = f" ${r.response.cost_usd:.4f}" if r.response.cost_usd else ""
     typer.secho(
-        f"{head}  ✓ {len(r.response.text)} chars, {secs:.1f}s{cost}",
+        f"{head}  ✓ {len(r.response.text)} chars, {secs:.1f}s",
         fg=typer.colors.GREEN,
         err=True,
     )
@@ -240,15 +239,12 @@ def run(
     if not dry_run and errors == 0:
         (run_dir / "compare.html").write_text(compare_html(result, 440), encoding="utf-8")
         typer.secho(f"compare.html -> {run_dir / 'compare.html'}", fg=typer.colors.GREEN, err=True)
-    total_cost = sum(r.response.cost_usd or 0.0 for r in result.responses)
     typer.secho(
         f"{'[dry-run] ' if dry_run else ''}{len(result.responses)} responses "
         f"({errors} error(s)) -> {run_dir}",
         fg=typer.colors.RED if errors else typer.colors.GREEN,
         err=True,
     )
-    if not dry_run and total_cost:
-        typer.secho(f"Total cost: ${total_cost:.4f}", fg=typer.colors.GREEN, err=True)
 
 
 @app.command()
