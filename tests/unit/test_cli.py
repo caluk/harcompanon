@@ -23,7 +23,7 @@ def test_version_command_prints_version() -> None:
 def test_help_lists_pipeline_verbs() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for verb in ("preprocess", "run", "check", "judge", "closeout"):
+    for verb in ("preprocess", "redact", "pseudonymize", "run", "compare", "retry"):
         assert verb in result.stdout
 
 
