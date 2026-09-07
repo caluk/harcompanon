@@ -77,13 +77,10 @@ def test_provider_error_is_captured_not_raised() -> None:
     assert item.response.text == ""
 
 
-def test_store_run_writes_json_and_index(tmp_path: Path) -> None:
+def test_store_run_writes_json(tmp_path: Path) -> None:
     result = run_benchmark(SAMPLE, [FakeProvider()], ["minimal", "structured"])
     run_dir = store_run(result, tmp_path)
-    index = (run_dir / "index.md").read_text(encoding="utf-8")
-    assert "### Mode: minimal" in index
-    assert "### Mode: structured" in index
-    assert "fake" in index
+    assert (run_dir / "run.json").is_file()
     saved = json.loads((run_dir / "responses" / "fake__minimal.json").read_text())
     assert saved["provider"] == "fake"
     assert saved["response"]["text"].startswith("seen ")
@@ -94,7 +91,7 @@ def test_cli_run_dry_run(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     run_dirs = list(tmp_path.iterdir())
     assert len(run_dirs) == 1
-    assert (run_dirs[0] / "index.md").exists()
+    assert (run_dirs[0] / "run.json").exists()
 
 
 def test_cli_run_rejects_unknown_mode(tmp_path: Path) -> None:

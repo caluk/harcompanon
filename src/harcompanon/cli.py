@@ -14,18 +14,14 @@ from typing import Annotated
 import typer
 
 from harcompanon import __version__
-from harcompanon.closeout import generate_closeout
 from harcompanon.compare import compare_html
 from harcompanon.config import DEFAULT_MAX_TOKENS, build_provider, load_credentials
 from harcompanon.execution import RunResponse, retry_failed, run_benchmark
-from harcompanon.judgment import generate_judgment
 from harcompanon.preprocess import SecurityScanner, load_har, preprocess_har
 from harcompanon.prompts import available_modes
 from harcompanon.pseudonymize import pseudonymize_file
 from harcompanon.redact import redact_file
 from harcompanon.storage import load_run, store_run
-from harcompanon.structural_check import check_run, check_structured, report_markdown
-from harcompanon.summary import load_runs, summarize
 
 app = typer.Typer(
     add_completion=False,
@@ -203,7 +199,7 @@ def run(
     modes: Annotated[
         str,
         typer.Option("--modes", help="Comma-separated prompt modes."),
-    ] = "minimal,briefed,structured",
+    ] = "minimal,structured",
     out: Annotated[
         Path,
         typer.Option("--out", "-o", help="Directory to write the run into."),
@@ -212,13 +208,9 @@ def run(
         bool,
         typer.Option("--dry-run/--live", help="Render prompts without calling any API."),
     ] = False,
-    backend: Annotated[
-        str,
-        typer.Option("--backend", help="'native' (vendor SDKs) or 'litellm' (opt-in)."),
-    ] = "native",
     prompt_version: Annotated[
         str,
-        typer.Option("--prompt-version", help="Prompt template version to render (e.g. v2, v3)."),
+        typer.Option("--prompt-version", help="Prompt template version to render (e.g. v2, v4)."),
     ] = "v2",
 ) -> None:
     """Run one fixture across the chosen providers x prompt modes (stateless API calls)."""
@@ -236,7 +228,7 @@ def run(
     provider_names = providers or ["anthropic"]
     if not dry_run:
         load_credentials()
-    built = [build_provider(name, model, max_tokens, backend) for name in provider_names]
+    built = [build_provider(name, model, max_tokens) for name in provider_names]
 
     result = run_benchmark(
         fixture, built, mode_list, version=prompt_version, dry_run=dry_run, on_response=_progress
@@ -244,6 +236,10 @@ def run(
     run_dir = store_run(result, out)
 
     errors = sum(1 for r in result.responses if r.error)
+    # A live run that fully succeeded is ready to read immediately — write the compare matrix.
+    if not dry_run and errors == 0:
+        (run_dir / "compare.html").write_text(compare_html(result, 440), encoding="utf-8")
+        typer.secho(f"compare.html -> {run_dir / 'compare.html'}", fg=typer.colors.GREEN, err=True)
     total_cost = sum(r.response.cost_usd or 0.0 for r in result.responses)
     typer.secho(
         f"{'[dry-run] ' if dry_run else ''}{len(result.responses)} responses "
@@ -295,30 +291,19 @@ def retry(
         int,
         typer.Option("--max-tokens", help="Max output tokens per response."),
     ] = DEFAULT_MAX_TOKENS,
-    backend: Annotated[
-        str,
-        typer.Option("--backend", help="'native' or 'litellm' (match how the run was made)."),
-    ] = "native",
 ) -> None:
-    """Re-run a run's failed or incomplete responses, back into the same run.
+    """Re-run a run's errored responses, back into the same run.
 
-    "Incomplete" = an errored response, or a structured response missing required sections (a
-    truncated or stunted answer). Successful, complete responses are left untouched.
+    Only responses that errored are redone; successful responses are left untouched.
     """
 
     def needs_redo(r: RunResponse) -> bool:
-        if r.error:
-            return True
-        # A structured answer that lost whole sections (truncated at the token cap, or a model
-        # that quit after the lead) is unusable for comparison — redo it too.
-        if r.mode == "structured" and not r.dry_run:
-            return not check_structured(r.response.text, version=r.version).all_sections_present()
-        return False
+        return bool(r.error)
 
     run = load_run(run_dir)
     failed = [r for r in run.responses if needs_redo(r)]
     if not failed:
-        typer.secho("Nothing to redo — all responses errored-free and complete.", err=True)
+        typer.secho("Nothing to redo — no errored responses.", err=True)
         return
 
     src = fixture or (Path("fixtures") / run.fixture)
@@ -330,117 +315,20 @@ def retry(
         )
         raise typer.Exit(code=2)
 
-    typer.secho(f"Redoing {len(failed)} failed/incomplete response(s) in {run_dir}…", err=True)
+    typer.secho(f"Redoing {len(failed)} errored response(s) in {run_dir}…", err=True)
     load_credentials()
     updated = retry_failed(
         run,
         src,
-        lambda name, model: build_provider(name, model, max_tokens, backend),
+        lambda name, model: build_provider(name, model, max_tokens),
         should_retry=needs_redo,
         on_response=_progress,
     )
     store_run(updated, run_dir.parent)
     still = sum(1 for r in updated.responses if needs_redo(r))
     typer.secho(
-        f"Redone -> {run_dir} ({still} still failed/incomplete)",
+        f"Redone -> {run_dir} ({still} still errored)",
         fg=typer.colors.RED if still else typer.colors.GREEN,
-        err=True,
-    )
-
-
-@app.command()
-def check(
-    run_dir: Annotated[
-        Path,
-        typer.Argument(exists=True, file_okay=False, help="A run directory (contains run.json)."),
-    ],
-    output: Annotated[
-        Path | None,
-        typer.Option(
-            "--output", "-o", help="Write the checklist here (default: <run>/structural_check.md)."
-        ),
-    ] = None,
-) -> None:
-    """Post-processing: structural conformance check of structured responses (not a verdict)."""
-    run = load_run(run_dir)
-    dest = output or (run_dir / "structural_check.md")
-    dest.write_text(report_markdown(run), encoding="utf-8")
-    checked = check_run(run)
-    conforming = sum(1 for _, report in checked if report.conforms())
-    typer.secho(
-        f"Structural check: {conforming}/{len(checked)} structured responses conform "
-        f"(mechanical presence check, not a verdict) -> {dest}",
-        fg=typer.colors.GREEN,
-        err=True,
-    )
-
-
-@app.command()
-def judge(
-    run_dir: Annotated[
-        Path,
-        typer.Argument(exists=True, file_okay=False, help="A run directory (contains run.json)."),
-    ],
-    output: Annotated[
-        Path | None,
-        typer.Option(
-            "--output", "-o", help="Write the judgment YAML here (default: <run>/judgment.yml)."
-        ),
-    ] = None,
-) -> None:
-    """Generate the human-judgment file for a run (you fill it in; you are the judge)."""
-    run = load_run(run_dir)
-    dest = output or (run_dir / "judgment.yml")
-    dest.write_text(generate_judgment(run), encoding="utf-8")
-    typer.secho(
-        f"Judgment form -> {dest} (you are the sole judge)", fg=typer.colors.GREEN, err=True
-    )
-
-
-@app.command()
-def closeout(
-    run_dir: Annotated[
-        Path,
-        typer.Argument(exists=True, file_okay=False, help="A run directory (contains run.json)."),
-    ],
-    output: Annotated[
-        Path | None,
-        typer.Option(
-            "--output", "-o", help="Write the close-out here (default: <run>/closeout.md)."
-        ),
-    ] = None,
-) -> None:
-    """Generate a session close-out scaffold from the five debrief questions."""
-    run = load_run(run_dir)
-    dest = output or (run_dir / "closeout.md")
-    dest.write_text(generate_closeout(run), encoding="utf-8")
-    typer.secho(f"Close-out scaffold -> {dest}", fg=typer.colors.GREEN, err=True)
-
-
-@app.command()
-def summary(
-    paths: Annotated[
-        list[Path] | None,
-        typer.Argument(help="Run dir(s) or parent dir(s) of runs. Default: runs/"),
-    ] = None,
-    output: Annotated[
-        Path | None,
-        typer.Option("--output", "-o", help="Write the summary here (default: stdout)."),
-    ] = None,
-) -> None:
-    """Descriptive cross-run summary (indicators, not a verdict)."""
-    runs = load_runs(paths or [Path("runs")])
-    if not runs:
-        typer.secho("No runs found (looked for run.json).", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=2)
-    text = summarize(runs)
-    if output is None:
-        typer.echo(text, nl=False)
-        return
-    output.write_text(text, encoding="utf-8")
-    typer.secho(
-        f"Summary of {len(runs)} run(s) -> {output} (indicators, not a verdict)",
-        fg=typer.colors.GREEN,
         err=True,
     )
 
