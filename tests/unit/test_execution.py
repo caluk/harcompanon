@@ -36,7 +36,6 @@ class FakeProvider:
             text=f"seen {len(prompt)} chars",
             input_tokens=10,
             output_tokens=5,
-            cost_usd=0.001,
             latency_ms=1.0,
         )
 

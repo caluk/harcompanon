@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 
-from harcompanon.providers.base import RawResponse, estimate_cost
+from harcompanon.providers.base import RawResponse
 
 
 class AnthropicProvider:
@@ -52,7 +52,6 @@ class AnthropicProvider:
             text=text,
             input_tokens=usage.input_tokens,
             output_tokens=usage.output_tokens,
-            cost_usd=estimate_cost(message.model, usage.input_tokens, usage.output_tokens),
             latency_ms=latency_ms,
             stop_reason=message.stop_reason,
         )

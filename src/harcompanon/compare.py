@@ -1,7 +1,7 @@
 """Render a run as a self-contained HTML comparison matrix — models x prompt modes.
 
 Each cell is a scrollable panel with the response rendered from markdown, plus a compact
-metadata header (model, tokens, cost, latency). Reading *across a row* compares a model's prompt
+metadata header (model, tokens, reasoning, latency). Reading *across a row* compares a model's
 modes (minimal vs structured); reading *down a column* compares all models on the same prompt.
 
 Like ``index.md``, this only *lays the responses out* — it never scores them. The page is a single
@@ -119,8 +119,8 @@ def _meta(item: RunResponse) -> str:
     bits = [html.escape(r.model)]
     if r.input_tokens or r.output_tokens:
         bits.append(f"{r.input_tokens or '—'}/{r.output_tokens or '—'} tok")
-    if r.cost_usd:
-        bits.append(f"${r.cost_usd:.4f}")
+    if r.reasoning_tokens:
+        bits.append(f"{r.reasoning_tokens} reasoning")
     if r.latency_ms:
         bits.append(f"{r.latency_ms / 1000:.1f}s")
     return " · ".join(bits)

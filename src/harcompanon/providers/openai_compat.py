@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import time
 
-from harcompanon.providers.base import RawResponse, estimate_cost
+from harcompanon.providers.base import RawResponse
 
 
 class OpenAICompatProvider:
@@ -69,7 +69,6 @@ class OpenAICompatProvider:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             reasoning_tokens=reasoning_tokens,
-            cost_usd=estimate_cost(model, input_tokens, output_tokens),
             latency_ms=latency_ms,
             stop_reason=stop_reason,
         )
