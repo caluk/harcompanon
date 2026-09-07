@@ -7,24 +7,17 @@ is replaced with the preprocessed evidence at render time.
 
 Modes:
 - ``minimal``    — bare probe; no role, no structure.
-- ``briefed``    — assigns the instrument role + the session-based, pre-go-live situation.
-- ``structured`` — role + situation + a required output structure (the only mode with a schema).
+- ``structured`` — role + situation + a required output structure.
 """
 
 from __future__ import annotations
 
-import json
 from importlib import resources
 from importlib.resources.abc import Traversable
-from typing import Any
 
 ARTIFACT_PLACEHOLDER = "{{artifact}}"
 _PACKAGE = "harcompanon"
 _PROMPTS_DIR = "prompts"
-#: The v2 spec keeps the original, unversioned filename (it is the committed study's schema);
-#: later versions live alongside it as ``structured_response.<version>.schema.json``.
-_STRUCTURED_SPEC = "schemas/structured_response.schema.json"
-_STRUCTURED_SPEC_VERSIONED = "schemas/structured_response.{version}.schema.json"
 
 
 def _prompts_root() -> Traversable:
@@ -56,20 +49,3 @@ def render_prompt(mode: str, artifact_json: str, version: str = "v2") -> str:
             f"Template {mode}/{version} is missing the {ARTIFACT_PLACEHOLDER} placeholder."
         )
     return template.replace(ARTIFACT_PLACEHOLDER, artifact_json)
-
-
-def load_structured_spec(version: str = "v2") -> dict[str, Any]:
-    """Return the structural spec for the ``structured`` prompt's output at ``version``.
-
-    Consumed later by the structural check (post-processing): the required sections and
-    per-finding fields the response should contain. A conformance spec, not a quality rubric.
-    A structured prompt version may bring its own spec when its section architecture changes
-    (v3 renames ``Start here`` to ``Overall picture`` and adds an optional ``Systemic
-    observations`` section). ``v2`` keeps the original unversioned filename, and any version
-    without a dedicated spec falls back to it — matching the historical behaviour when the check
-    was version-agnostic.
-    """
-    spec_file = resources.files(_PACKAGE) / _STRUCTURED_SPEC_VERSIONED.format(version=version)
-    if not spec_file.is_file():
-        spec_file = resources.files(_PACKAGE) / _STRUCTURED_SPEC  # fall back to the v2 baseline
-    return json.loads(spec_file.read_text(encoding="utf-8"))  # type: ignore[no-any-return]

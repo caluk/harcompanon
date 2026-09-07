@@ -17,18 +17,17 @@ human to stop looking. That difference is the thing being measured.
 
 The word *companion* is deliberate. The model is an **instrument inside a human's sapient
 process**, never a "tester." Testing requires sapience and accountability that an AI cannot
-hold — so **the human is always the sole judge** of response quality. The tool may perform
-mechanical **post-processing** (structural checks, descriptive summaries); it never judges.
+hold — so **the human is always the sole judge** of response quality. The tool only prepares the
+evidence and lays the responses side by side; it never scores or judges.
 
 ## How it works
 
 ```
-HAR fixture ─▶ preprocess ──▶ run (providers × prompts) ──▶ per-response JSON + comparison index
-   │            (strip noise,        stateless API calls              │
-   │             keep envelope)                                       ▼
-   ├─ redact ─▶ (mask secrets)                    check ──▶ judge ──▶ closeout ──▶ summary
-   └─ security scan (safety)             (structural,   (YOU judge)  (5 debrief   (descriptive
-                                          not a verdict)             questions)    indicators)
+HAR fixture ─▶ preprocess ──▶ run (providers × prompts) ──▶ per-response JSON + compare.html
+   │            (strip noise,        stateless API calls          (side-by-side matrix,
+   │             keep envelope)                                    auto-built on a clean run)
+   ├─ redact ─▶ (mask secrets)
+   └─ security scan (safety)
 ```
 
 - **Preprocess** — mechanical noise removal only: keep every call's *envelope* (method, URL,
@@ -37,33 +36,32 @@ HAR fixture ─▶ preprocess ──▶ run (providers × prompts) ──▶ per
   **secrets/PII scan** warns you about anything sensitive in the raw HAR.
 - **Redact** — mask every scanner-detected secret value with `<REDACTED>`, producing a copy
   that is safe to commit *and* safe to send to models. (Heuristic — eyeball before publishing.)
-- **Prompts** — three versioned tiers, so the *effect of an intervention* is measurable, not a
-  single number:
-  - `minimal` — bare ("what looks strange here?"); no role, no structure.
-  - `briefed` — assigns the instrument role + a session-based, pre-go-live situation.
-  - `structured` — a required output shape: a labelled **oracle** per finding, hypotheses (not
-    findings), the questions only a human can answer, and a self-critique.
-  The `minimal→briefed` gap isolates role + situation; `briefed→structured` isolates structure.
+- **Prompts** — versioned, so the *effect of an intervention* is measurable, not a single number:
+  - `minimal` — bare ("what do you notice?"); no role, no structure.
+  - `structured` — a required output shape: an **Overall picture** (a product model), findings
+    each with an oracle and possible impact, systemic observations, the questions only a human
+    can answer, coverage depth, and a self-critique.
+  The `minimal→structured` gap isolates what the structure adds.
 - **Providers** — Claude, OpenAI, Gemini, DeepSeek, Mistral, Kimi behind one small abstraction;
   adding a model is one class + one registry entry. Calls are stateless (comparable months
   apart). Keys load from a git-ignored `.env` (see `.env.example`).
 - **A run** = one frozen fixture × the chosen providers × the chosen prompt modes. Everything is
   flat files — no database.
-- **Check / judge / closeout / summary** — post-run: a mechanical structural checklist, a
-  low-friction judgment form the human fills in, a five-question RST debrief scaffold, and a
-  descriptive cross-run summary. None of them score quality — that stays the human's job.
+- **Compare** — renders a run as a self-contained `compare.html` matrix (models × prompt modes)
+  with each response's latency, tokens and cost alongside, for side-by-side reading. It's a
+  comparison surface, not a score. Auto-built when a live run finishes error-free;
+  `harcompanon compare <run-dir>` rebuilds it (e.g. after `retry`).
 
 ## CLI
 
 ```bash
-harcompanon preprocess <har> [-o out.json] [--security-report r.md]   # clean + scan a HAR
-harcompanon redact <har> [-o out.har]                                 # mask detected secrets
-harcompanon run <fixture> [-p anthropic ...] [--model M] [--modes ...] # a run (--dry-run/--live)
-                          [--max-tokens N] [--out runs]
-harcompanon check <run-dir>       # structural conformance checklist (post-processing)
-harcompanon judge <run-dir>       # -> judgment.yml  (YOU fill it in — you are the judge)
-harcompanon closeout <run-dir>    # -> closeout.md   (five debrief questions)
-harcompanon summary <path>...     # descriptive cross-run indicators (not a verdict)
+harcompanon preprocess <har> [-o out.json] [--security-report r.md]  # clean + scan a HAR
+harcompanon redact <har> [-o out.har]                                # mask detected secrets
+harcompanon pseudonymize <har> [-o out.har] [--exclude KEY]          # swap domain PII for synthetic
+harcompanon run <fixture> [-p anthropic ...] [--modes ...] [--prompt-version v4]  # a run
+                          [--model M] [--max-tokens N] [--out runs]  #   (--dry-run/--live)
+harcompanon compare <run-dir>     # -> compare.html  (matrix; auto-built on error-free live runs)
+harcompanon retry <run-dir>       # re-run only the errored responses, back into the same run
 ```
 
 `run` is **live by default**; pass `--dry-run` to render the prompts and exercise the whole
@@ -75,20 +73,13 @@ pipeline without spending a token. Providers default to `anthropic`; repeat `-p`
 pip install -e ".[dev]"
 cp .env.example .env          # then add your provider keys (never committed)
 
-harcompanon run fixtures/your-capture.har --dry-run          # no API call, no spend
-harcompanon run fixtures/your-capture.har --live -p anthropic # one real run
-harcompanon check runs/<run-id>
-harcompanon judge runs/<run-id>                              # then fill in judgment.yml
-harcompanon closeout runs/<run-id>
+harcompanon run fixtures/your-capture.har --dry-run           # no API call, no spend
+harcompanon run fixtures/your-capture.har --live -p anthropic # one real run -> compare.html
+harcompanon compare runs/<run-id>                             # rebuild the matrix if needed
 ```
 
 You supply your own HAR — capture one from a site you're testing (DevTools → Network →
 "Save all as HAR"), then `redact` (and `pseudonymize` if it holds domain PII) before use.
-
-> **Optional, for fun:** an experimental `--backend litellm` routes every provider through
-> [LiteLLM](https://github.com/BerriAI/litellm) instead of the vendor SDKs (`pip install -e ".[litellm]"`).
-> It's a learning exercise, not a core dependency — the default `--backend native` is the supported
-> path. See [docs/litellm-backend.md](docs/litellm-backend.md).
 
 ## Fixtures
 
@@ -99,9 +90,8 @@ a real system, **`redact` it and review it** before it goes anywhere public. See
 
 ## Status
 
-Pre-alpha. Work is tracked with [Beans](https://github.com/hmans/beans) in `.beans/`
-(`beans roadmap`). The full pipeline is built; the remaining v1 step is a committed, documented
-example run.
+Pre-alpha, exploratory. The pipeline is intentionally small: prepare the evidence, run the same
+prompt across models, and lay the responses side by side for a human to judge.
 
 ## Two senses of "testing" — keep them separate
 

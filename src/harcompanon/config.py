@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 from harcompanon.providers import (
     AnthropicProvider,
     GeminiProvider,
-    LiteLLMProvider,
     OpenAICompatProvider,
     OpenAIProvider,
     Provider,
@@ -85,20 +84,11 @@ def build_provider(
     name: str,
     model: str | None = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
-    backend: str = "native",
 ) -> Provider:
-    """Construct a configured provider by name.
-
-    ``backend="native"`` (default) uses each vendor's own SDK. ``backend="litellm"`` routes the
-    same model through LiteLLM instead — an opt-in alternative (needs the ``litellm`` extra).
-    """
+    """Construct a configured provider by name, using each vendor's own SDK."""
     if name not in _REGISTRY:
         raise ValueError(
             f"Unknown provider {name!r}. Available: {', '.join(available_providers()) or '(none)'}."
         )
     resolved = model or DEFAULT_MODELS[name]
-    if backend == "litellm":
-        return LiteLLMProvider(name, resolved, max_tokens)
-    if backend != "native":
-        raise ValueError(f"Unknown backend {backend!r} (use 'native' or 'litellm').")
     return _REGISTRY[name](resolved, max_tokens)
