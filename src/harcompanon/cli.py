@@ -1,9 +1,7 @@
 """Command-line entry point for harcompañon.
 
-The pipeline is intentionally split into small, composable verbs. Each verb below is
-a stub for now; the real behaviour arrives with its tracked Beans task (id in the
-message). Nothing here judges response quality — judging is the human's job. Any verb
-that touches model output does so only as mechanical *post-processing*.
+The pipeline is split into small, composable verbs (preprocess, redact, pseudonymize,
+run, compare, retry). Nothing here judges response quality — that stays the human's job.
 """
 
 from __future__ import annotations

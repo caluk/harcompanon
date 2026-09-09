@@ -1,12 +1,9 @@
-"""Core typed data models.
+"""Typed data model for the cleaned HAR artifact that preprocessing produces.
 
-For now this holds the *cleaned artifact* that preprocessing produces — a faithful,
-noise-stripped view of a HAR. The philosophy is "keep the whole request/response
-*envelope*, strip only the heavy/binary *bodies*": every call's method, URL, status,
-timing, content types, and a curated set of (mostly security-relevant) headers are kept, so
-the full API surface a tester scrutinises survives; only noise bodies (images, fonts, JS,
-base64) are dropped, while JSON bodies are kept. More core types (runs, responses, findings,
-the RST ladder) will land alongside their own tasks.
+The philosophy is "keep the whole request/response *envelope*, strip only the heavy/binary
+*bodies*": every call's method, URL, status, timing, content types, and a curated set of
+(mostly security-relevant) headers are kept, so the full API surface a tester scrutinises
+survives; only noise bodies (images, fonts, JS, base64) are dropped, while JSON bodies are kept.
 """
 
 from __future__ import annotations

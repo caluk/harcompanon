@@ -230,6 +230,9 @@ __marimo__/
 # Private working notes for the article — draft material, kept local, never published to the repo.
 /ARTICLE_NOTES.md
 
+# Local task backlog (machine-generated); not part of the shipped project.
+/.beans/
+
 # Local-only HAR captures and screenshots. Real/personal captures live in fixtures/ for local
 # dev but must never be committed. HAR files (including .redacted.har and .pseudo.har outputs)
 # and screenshots (.png) are ignored by default. To commit a safe/public one, add a matching
