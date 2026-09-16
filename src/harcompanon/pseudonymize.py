@@ -14,7 +14,7 @@ Two passes:
   ``city`` → ``Berlin``, person names (``display_name`` …) → a synthetic English/German name,
   service/dealer names → ``Lexus Service``. IP-valued keys become a valid-looking IPv4.
 - **pattern-based** — UUIDs and (letter-bearing) VINs are replaced wherever they appear (URL
-  paths, ``_initiator.url``, the ``:path`` header, bodies). IPs and names learned from a key are
+  paths, ``_initiator.url``, the ``:path`` header, bodies). IPs learned from a key are
   additionally replaced *literally* wherever they recur (e.g. a client IP in a geoip URL path).
 
 Heuristic, like ``redact``: it can't *guarantee* it caught every PII field in an arbitrary API —
@@ -57,7 +57,7 @@ DEFAULT_PII_KEYS: frozenset[str] = frozenset(
         "latitude",
         "longitude",
         # NB: bare "name"/"lat"/"lng" are deliberately NOT here — in map/POI APIs they hold
-        # legitimate place names and coordinates (komoot has 1064 POI lat/lng, 75 place names).
+        # legitimate place names and coordinates.
         # Person names go through NAME_KEYS; numeric coords are left untouched anyway.
         "firstname",
         "lastname",
@@ -89,8 +89,7 @@ CITY_REPLACEMENT = "Berlin"
 #: Person full-name keys (NOT bare "name" — that is a place/POI name in map APIs).
 NAME_KEYS: frozenset[str] = frozenset({"display_name", "displayname", "fullname", "full_name"})
 #: Person names become a synthetic but plausible English/German name — deterministic per real
-#: value (same real name → same fake), distinct per person (so the count of distinct people
-#: survives), and never a fixed label (a repeated name would read as scrubbed). Unlike an IP, a
+#: value (same real name → same fake), with possible collisions in the finite name pool. A
 #: name is NOT replaced literally everywhere: that smears it into unrelated prose (Wikipedia text,
 #: photo attributions). Names are replaced only where they sit under a name *key* — including
 #: inside a JSON body inlined as an escaped string in an HTML document (see _replace_keyed_in_text).
@@ -209,7 +208,7 @@ class Pseudonymizer:
         self._map: dict[str, str] = {}
         self._synth_values: set[str] = set()  # outputs we produced — never re-map them
         #: real→synth for values that must ALSO be replaced literally wherever they appear
-        #: (an IP or name learned from a body key but also embedded in a URL path / free text).
+        #: (an IP learned from a body key but also embedded in a URL path / free text).
         self._literals: dict[str, str] = {}
         self.counts: Counter[str] = Counter()
 
@@ -243,7 +242,7 @@ class Pseudonymizer:
         return "".join(out)
 
     def _fake_name(self, real: str) -> str:
-        """A plausible English/German full name, deterministic and distinct per real name."""
+        """A plausible English/German full name, deterministic but not collision-free."""
         first = _FIRST_NAMES[self._digest("first", real)[0] % len(_FIRST_NAMES)]
         last = _LAST_NAMES[self._digest("last", real)[1] % len(_LAST_NAMES)]
         return f"{first} {last}"
@@ -360,8 +359,8 @@ class Pseudonymizer:
     def _apply_literals(self, text: str) -> str:
         """Replace each known real IP literal wherever it appears (e.g. a geoip URL path).
 
-        Boundary-guarded so an IP isn't matched inside a longer number (e.g. ``77.0.27.172`` must
-        not fire inside ``77.0.27.1720``). Only exact learned values are touched — never a pattern
+        Boundary-guarded so an IP isn't matched inside a longer number (e.g. ``198.51.100.42`` must
+        not fire inside ``198.51.100.420``). Only exact learned values are touched — never a pattern
         — so there are no false positives.
         """
         for real, synth in self._literals.items():
@@ -410,7 +409,7 @@ def pseudonymize_file(
     entries: list[Any] = raw_entries if isinstance(raw_entries, list) else []
 
     # Pass 1 — key-based body synthesis across *all* entries (plates, mileage, addresses; and
-    # learn the IP/name literals). Done for every entry before any literal is applied, so a value
+    # learn the IP literals). Done for every entry before any literal is applied, so a value
     # learned late (e.g. from a geoip JSON body) still reaches an earlier entry — like an HTML
     # document at entry 0 that inlines the same name/IP and is never JSON-parsed.
     for entry in entries:

@@ -1,11 +1,8 @@
 """Google Gemini provider — same Provider protocol, different SDK.
 
-Stateless single-shot call via the ``google-genai`` SDK. No temperature (model default), for
-cross-provider comparability. Thinking is set to a dynamic budget (``thinking_budget=-1``) so
-reasoning is ON and model-decided, matching the other providers in the equalized-reasoning
-configuration. The thinking tokens are reported apart from the visible output (as
-``thoughts_token_count``) and captured into ``reasoning_tokens`` so counts stay comparable. The
-SDK is imported lazily so --dry-run and tests need neither the package nor a key.
+Stateless single-shot call with default sampling and a dynamic thinking budget.
+Thinking tokens are reported separately from visible output. Reasoning controls and token
+accounting differ across providers. The SDK is imported lazily.
 """
 
 from __future__ import annotations
@@ -42,7 +39,7 @@ class GeminiProvider:
             contents=prompt,
             config=types.GenerateContentConfig(
                 max_output_tokens=self.max_tokens,
-                # Dynamic thinking budget: reasoning ON, model decides depth (equalized config).
+                # Let the model choose its thinking budget.
                 thinking_config=types.ThinkingConfig(thinking_budget=-1),
             ),
         )

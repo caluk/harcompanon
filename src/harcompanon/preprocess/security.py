@@ -57,7 +57,14 @@ SENSITIVE_QUERY_KEYS: dict[str, Severity] = {
 
 #: (category, severity, compiled pattern) applied to URLs and body text.
 _PATTERNS: list[tuple[str, Severity, re.Pattern[str]]] = [
-    ("private_key", Severity.HIGH, re.compile(r"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----")),
+    (
+        "private_key",
+        Severity.HIGH,
+        re.compile(
+            r"-----BEGIN (?P<key_type>(?:[A-Z ]+ )?PRIVATE KEY)-----"
+            r"[\s\S]*?(?:-----END (?P=key_type)-----|$)"
+        ),
+    ),
     ("aws_access_key", Severity.HIGH, re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("slack_token", Severity.HIGH, re.compile(r"xox[baprs]-[0-9A-Za-z-]{10,}")),
     ("google_api_key", Severity.MEDIUM, re.compile(r"AIza[0-9A-Za-z_-]{35}")),
@@ -199,7 +206,9 @@ class SecurityScanner(BaseModel):
             resp_obj = entry.get("response")
             response: dict[str, Any] = resp_obj if isinstance(resp_obj, dict) else {}
             url = str(request.get("url", ""))
-            location = f"entry[{index}] {url.split('?')[0][:80]}"
+            # Paths, userinfo and fragments can carry secrets too; the index locates the call
+            # without copying any unmasked part of its URL into the report.
+            location = f"entry[{index}]"
 
             self._scan_headers(request.get("headers"), "request header", location, add)
             self._scan_headers(response.get("headers"), "response header", location, add)
@@ -311,4 +320,4 @@ def collect_secrets(raw: dict[str, Any]) -> list[str]:
             for match in _CREDENTIAL_FIELD.finditer(body):
                 values.add(match.group(2))
 
-    return sorted((v for v in values if v), key=len, reverse=True)
+    return sorted((v for v in values if v and v != REDACTED_MARKER), key=len, reverse=True)

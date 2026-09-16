@@ -92,11 +92,13 @@ def test_report_masks_every_secret() -> None:
 
 def test_scan_does_not_touch_cleaned_evidence() -> None:
     raw = json.loads(SECRETS.read_text(encoding="utf-8"))
+    raw_before = json.dumps(raw)
     before = preprocess_har(raw, source_har="secrets_sample.har").to_canonical_json()
     SecurityScanner().scan(raw, source_har="secrets_sample.har")
     after = preprocess_har(raw, source_har="secrets_sample.har").to_canonical_json()
     # The scan must not mutate the raw HAR or change the cleaned artifact.
     assert before == after
+    assert json.dumps(raw) == raw_before
     assert "hunter2password" in before  # the cleaned evidence is faithful, not redacted
 
 
@@ -147,3 +149,23 @@ def test_cli_can_disable_scan(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0
     assert "security scan" not in result.output.lower()
+
+
+def test_report_location_does_not_leak_url_secrets() -> None:
+    secret = "private-path-token"
+    raw = {
+        "log": {
+            "entries": [
+                {
+                    "request": {
+                        "url": f"https://user:{secret}@example.com/reset/{secret}#{secret}",
+                        "headers": [{"name": "Authorization", "value": f"Bearer {secret}"}],
+                    }
+                }
+            ]
+        }
+    }
+    report = SecurityScanner().scan(raw)
+    assert report.findings[0].location == "entry[0]"
+    assert secret not in report.model_dump_json()
+    assert secret not in report.to_markdown()

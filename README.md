@@ -1,174 +1,131 @@
 # harcompañon
 
-A small, reproducible tool that compares how different LLMs behave as **testing companions**
-when handed the *same* real evidence and the *same* prompt.
+Compare how LLMs behave as **testing companions** when given the same frozen evidence
+and prompt. harcompañon prepares a HAR capture, calls providers, and lays their responses
+out in a self-contained `compare.html` matrix for a human to read.
 
-It is **not** a coding benchmark, **not** a capability leaderboard, and **not** about generating
-automated checks. It measures **judgment quality** in the vocabulary of Rapid Software Testing
-(RST) — see [RST vocabulary](#rst-vocabulary) below. The human is always the sole judge.
+This is not a coding benchmark, capability leaderboard, automated evaluation, or LLM-as-judge.
+The tool never scores quality. The question for the human is whether a companion surfaces
+useful risks and invites further investigation, or produces plausible text that encourages
+them to stop looking.
 
-## The question it answers
+## Quickstart
 
-When a human is testing something and is *equipped with* an LLM, does that human + AI combination
-reach higher, better-grounded confidence? A **good** companion surfaces risk and invites continued
-scrutiny. A **bad** one produces plausible-sounding text that invites the human to stop looking.
-That difference is the thing being measured.
-
-The word *companion* is deliberate. The model is an **instrument inside a human's sapient
-process**, never a "tester." Testing requires sapience and accountability an AI cannot hold — so
-**the human is always the sole judge** of response quality. The tool only prepares the evidence
-and lays the responses side by side; it never scores or judges.
-
-## How it works
-
-```
-HAR fixture ─▶ preprocess ──▶ run (providers × prompts) ──▶ per-response JSON + compare.html
-   │            (strip noise,        stateless API calls          (side-by-side matrix,
-   │             keep envelope)                                    auto-built on a clean run)
-   ├─ redact ─▶ (mask secrets)
-   └─ security scan (safety)
-```
-
-- **Preprocess** — mechanical noise removal only: keep every call's *envelope* (method, URL,
-  status, timing, curated headers) and its JSON bodies; strip heavy/binary/oversized bodies to a
-  `<stripped: …>` marker. A built-in **secrets/PII scan** warns about anything sensitive in the raw
-  HAR.
-- **Redact** — mask every scanner-detected secret value with `<REDACTED>`, producing a copy safe to
-  commit *and* to send to models. (Heuristic — eyeball before publishing.)
-- **Pseudonymize** — replace domain PII (VINs, plates, addresses, device IDs, UUIDs) with realistic
-  synthetic values, for a capture you want to share without leaking real data.
-- **Prompts** — versioned, so the *effect of an intervention* is measurable, not a single number:
-  - `minimal` — bare ("what do you notice?"); no role, no structure.
-  - `structured` — a required output shape: an **Overall picture** (a product model), findings each
-    with an oracle and possible impact, systemic observations, the questions only a human can
-    answer, coverage depth, and a self-critique.
-  The `minimal→structured` gap isolates what the structure adds.
-- **Providers** — Claude, OpenAI, Gemini, DeepSeek, Mistral, Kimi behind one small abstraction;
-  adding a model is one class + one registry entry. Calls are stateless (comparable months apart),
-  models are pinned to fixed versions, and reasoning is configured equally where each SDK allows.
-  Keys load from a git-ignored `.env` (see `.env.example`).
-- **A run** = one frozen fixture × the chosen providers × the chosen prompt modes. Everything is
-  flat files — no database.
-- **Compare** — renders a run as a self-contained `compare.html` matrix (models × prompt modes) with
-  each response's latency, tokens, and reasoning tokens alongside, for side-by-side reading. A
-  comparison surface, not a score. Auto-built when a live run finishes error-free;
-  `harcompanon compare <run-dir>` rebuilds it (e.g. after `retry`).
-
-## CLI
-
-```bash
-harcompanon preprocess <har> [-o out.json] [--security-report r.md]  # clean + scan a HAR
-harcompanon redact <har> [-o out.har]                                # mask detected secrets
-harcompanon pseudonymize <har> [-o out.har] [--exclude KEY]          # swap domain PII for synthetic
-harcompanon run <fixture> [-p anthropic ...] [--modes ...] [--prompt-version v5]  # a run
-                          [--model M] [--max-tokens N] [--out runs]  #   (--dry-run/--live)
-harcompanon compare <run-dir>     # -> compare.html  (matrix; auto-built on error-free live runs)
-harcompanon retry <run-dir>       # re-run only the errored responses, back into the same run
-```
-
-`run` is **live by default**; pass `--dry-run` to render the prompts and exercise the whole
-pipeline without spending a token. Providers default to `anthropic`; repeat `-p` for more.
-
-## Quickstart (dev)
+Requires Python 3.11 or newer. From a checkout:
 
 ```bash
 pip install -e ".[dev]"
-cp .env.example .env          # then add your provider keys (never committed)
+cp .env.example .env  # add keys for the providers you use
 
-harcompanon run fixtures/your-capture.har --dry-run           # no API call, no spend
-harcompanon run fixtures/your-capture.har --live -p anthropic # one real run -> compare.html
-harcompanon compare runs/<run-id>                             # rebuild the matrix if needed
+# Supply your own capture; review the redacted copy before sending it anywhere.
+harcompanon redact fixtures/session.har
+harcompanon preprocess fixtures/session.redacted.har -o /dev/null --security-report /tmp/harcompanon-security.md
+harcompanon run fixtures/session.redacted.har --dry-run
+harcompanon run fixtures/session.redacted.har -p anthropic -p openai
 ```
 
-You supply your own HAR — capture one from a site you're testing (DevTools → Network → "Save all as
-HAR"), then `redact` (and `pseudonymize` if it holds domain PII) before use.
+`run` is **live by default**. `--dry-run` renders prompts and writes placeholder responses
+without API calls or credentials; it does not save the rendered prompts. The default provider
+is `anthropic`, the prompt modes are `minimal,structured`, and the prompt version is `v5`.
+Keys load from the environment or a local `.env` (see [.env.example](.env.example)).
 
-## Fixtures
+Real captures and run outputs stay local. `redact` and `pseudonymize` are heuristics, not
+anonymity guarantees. Review the resulting HAR before sending it to a provider or publishing
+it. See [fixtures/README.md](fixtures/README.md) for preparation and limitations.
 
-Frozen HAR captures live in [`fixtures/`](fixtures) and are **git-ignored by default** — no captures
-are committed, since real ones carry personal data. Bring your own: if it comes from a real system,
-**`redact` it and review it** before it goes anywhere public. See [fixtures/README.md](fixtures/README.md).
+## Pipeline
+
+```text
+HAR → redact / pseudonymize → review → preprocess → providers × prompt modes
+                                                  → run.json + response JSON + compare.html
+```
+
+- **Preprocess** keeps every valid call's method, URL, status, timing, content types,
+  and selected headers. Recognized sensitive header values are masked. JSON bodies are kept;
+  other present bodies, base64 bodies, and bodies over 20,000 characters become
+  `<stripped: …>` markers. Responses to HEAD and statuses 1xx, 204, and 304 have no body.
+  The `preprocess` command also scans the raw HAR and reports separately; `run` preprocesses
+  internally but does **not** run that scan or redact body/query secrets.
+- **Prompts** are [versioned Markdown files](src/harcompanon/prompts): `minimal` is a bare
+  probe; `structured` adds RST framing, a product overview, findings, systemic observations,
+  questions for a human, coverage depth, and a self-critique. In v5, findings distinguish
+  observation, interpretation, and next investigation, with oracles and impact when useful.
+- **Providers** are Anthropic, OpenAI, Gemini, DeepSeek, Mistral, and Kimi. Each receives a
+  stateless request with the same rendered prompt for a given mode.
+- **Storage** is flat files: `run.json` and `responses/<provider>__<mode>.json`. An error-free
+  live run also creates `compare.html`, with models as columns and prompt modes as rows.
+  It includes latency, token counts, and reasoning tokens where reported. No database or server.
+
+```bash
+harcompanon preprocess <har> [-o cleaned.json] [--security-report report.md]
+harcompanon redact <har> [-o redacted.har]
+harcompanon pseudonymize <har> [-o synthetic.har] [--exclude KEY]
+harcompanon run <har> [-p PROVIDER] [--modes minimal,structured] [--prompt-version v5]
+harcompanon compare <run-dir>                 # build or rebuild compare.html
+harcompanon retry <run-dir> [--fixture <har>] # retry errored responses in place
+```
+
+Run options include `--model`, `--max-tokens` (default 32,000), and `--out` (default `runs`).
+Repeat `-p` for more providers. A model override applies to every selected provider; use it
+with a single provider unless the ID is valid for all of them. After `retry`, rebuild the
+matrix with `compare`. Retry needs the original, unchanged fixture; its default lookup is
+`fixtures/<original-filename>`.
+
+## Method and limits
+
+Freeze the reviewed fixture and retain the code revision, prompt version, model IDs, run date,
+and invocation when comparing results. The manifest records model IDs and prompt versions,
+but does not archive the fixture, rendered prompts, or all request settings. Retry re-reads
+the fixture without checking that it is unchanged.
+
+Default model IDs are centralized in [config.py](src/harcompanon/config.py). Explicit IDs
+and versioned prompts help trace a run, but do not guarantee immutable provider deployments
+or identical responses. Sampling uses provider defaults. Anthropic requests adaptive thinking,
+OpenAI high reasoning effort, and Gemini a dynamic thinking budget; compatible APIs receive
+no explicit reasoning setting. These are different controls, not equal reasoning budgets.
+Token accounting also differs by provider.
+
+The minimal/structured comparison explores the effect of the **whole prompt intervention**,
+including framing and instructions, not structure alone. A single run cannot separate that
+effect from response variability. Redaction and pseudonymization can alter relationships in
+the evidence; missing bodies and selected headers also limit what can be inferred.
+
+Judge responses against the original evidence and product context in your own notes.
+Longitudinal comparisons should name the fixture, prompt/model versions, and date: both the
+models and what humans consider useful judgment can change.
 
 ## RST vocabulary
 
-The vocabulary this project holds itself to — strict enough that careful RST practitioners (in the
-tradition of James Bach and Michael Bolton) wouldn't find it conflated or watered down. When code,
-comments, prompts, or commits use these terms, they mean *exactly* this.
+This project follows James Bach and Michael Bolton's distinction in
+[“Testing and Checking Refined”](https://www.satisfice.com/blog/archives/856), paraphrased here:
 
-- **Testing** — evaluating a product by learning about it through exploration and experimentation
-  (questioning, study, modeling, observation, inference). It is open-ended, investigative, *sapient*,
-  and **cannot be automated** — only *supported* by tools and checks.
-- **Checking** — applying algorithmic decision rules to specific observations of a product: an
-  observation, a decision rule, and the property that it runs **algorithmically**. Checks are
-  valuable and embedded *within* testing. This tool does not measure whether a model can write
-  checks; it measures how good the model is as a companion to a *human who is testing*. (The `pytest`
-  suite under `tests/` is *checking* our own code — a separate sense from the subject matter; keep
-  the two visibly distinct.)
-- **Oracle** — a means by which we recognize a problem when we meet one: a heuristic with a reason
-  behind it, not guaranteed truth. Oracles are plural and fallible (cf. the RST heuristic **FEW
-  HICCUPPS** — Familiarity, Explainability, World, History, Image, Comparable products, Claims, User
-  expectations, Product consistency, Purpose, Statutes). A finding that can't **name its oracle**
-  isn't yet defensible — which is why the structured prompt asks for an oracle per finding.
-- **Sapience & accountability** — the load-bearing constraint: a model is never scored *as a tester*
-  (that needs sapience *and* accountability, which an AI can hold neither of), only as an instrument
-  inside a human's sapient process; and **the human is the sole judge** of quality.
-- **Companion** — the role being evaluated: an LLM used *alongside* a human during a focused session.
-  A good companion **surfaces risk and invites continued scrutiny**, raising grounded confidence; a
-  poor one produces **plausible-sounding text that invites the human to stop looking**. That contrast
-  is the axis of the whole comparison.
+- **Testing** evaluates a product through human learning, exploration, and experimentation.
+  Tools support that work; they do not take responsibility for the judgment.
+- **Checking** applies algorithmic rules to observations. The pytest suite checks this
+  repository's code; it does not evaluate model response quality.
+- **Oracle** is a fallible means of recognizing a possible problem: an expectation and a
+  reason for it. It is a basis for investigation, not guaranteed truth.
+- **Companion** is this project's framing for an LLM used within a human's testing process.
+  The human retains judgment and accountability.
 
-**The evaluation ladder** (this project's own construct, *not* RST canon) — a way for the human to
-place each finding, **only after checking it against the raw evidence**:
+The following **evaluation ladder is this project's own construct**, not RST terminology
+or an automated scoring system. It is for a human's notes:
 
 | Level | Meaning |
 | --- | --- |
-| **slop** | Ungrounded, fabricated, or contradicted by the evidence. Would mislead a tester. |
-| **plausible** | Reads as reasonable but has **not** been checked — the danger zone that invites you to stop looking. |
-| **provisional** | Checked against the evidence and currently supported, held tentatively. |
-| **validated** | Checked and **defensible**: the human can own it as their own conclusion, with a **named oracle**. |
+| **slop** | Ungrounded, fabricated, or contradicted by the evidence. |
+| **plausible** | Reads reasonably but has not been checked against the evidence. |
+| **provisional** | Checked against the evidence and tentatively supported. |
+| **validated** | Checked and defensible, with a named oracle; the human owns the conclusion. |
 
-RST definitions above follow Bach & Bolton, in particular
-["Testing and Checking Refined"](https://www.satisfice.com/blog/archives/856) (2013); paraphrased
-here — consult the originals for authoritative wording. The **ladder** and the **companion** framing
-are this project's own.
+## Development
 
-## Methodology & caveats
+```bash
+ruff check .
+ruff format --check .
+mypy
+pytest
+```
 
-**The construct.** How good is an LLM as a testing companion to a human running a session-based
-test — an instrument that raises the human's grounded confidence and the quality of their findings.
-A good companion surfaces risk and invites scrutiny; a poor one invites the human to stop looking.
-The model is never scored *as a tester*; the human is the sole judge.
-
-**The procedure.**
-- **One frozen fixture** — a real HAR, preprocessed the same way every run (mechanical noise removal
-  only).
-- **Stateless, direct API calls** — no chat apps, memory, or personalization, so reruns are
-  comparable months apart.
-- **A prompt gradient, not one prompt** — `minimal` (bare) → `structured` (a required output shape).
-  **The gap is the finding, not noise to average away.**
-- **Reasoning configured equally** across providers where the SDK allows (adaptive / effort / dynamic
-  thinking). Mistral Large, which has no reasoning mode, is the one documented exception.
-- **The human judges** — in their own notes, against the raw evidence. Nothing in the tool scores
-  quality.
-
-**Deliberate choices.**
-- Sampling left at each provider's default (no temperature — current Claude models reject it, and
-  forcing it on others would create an asymmetry; default sampling also serves reproducibility).
-- Only JSON bodies are kept; other bodies are shown as an explicit `<stripped: …>` marker.
-- Structured output stays human-readable markdown, not forced JSON.
-- Models pinned to fixed, concrete versions (no floating `-latest`), for reproducibility.
-
-**Caveat for longitudinal use.** Rerunning the same frozen fixture against new model releases gives a
-longitudinal read — but **the construct itself drifts**: what counts as "good judgment," and what a
-strong model finds trivial versus hard, changes as models improve. A result is only meaningful
-relative to the fixture, the prompt versions, and the era it was produced in. Any published
-comparison must name all three and carry this caveat.
-
-## Status
-
-Pre-alpha, exploratory. The pipeline is intentionally small: prepare the evidence, run the same
-prompt across models, and lay the responses side by side for a human to judge.
-
-## License
-
-[MIT](LICENSE).
+The suite uses synthetic HARs and fake providers, without live API calls.
+Pre-alpha and exploratory. Licensed under [MIT](LICENSE).

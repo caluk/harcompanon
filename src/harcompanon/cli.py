@@ -61,7 +61,7 @@ def preprocess(
         ),
     ] = True,
 ) -> None:
-    """Strip a HAR down to its JSON API calls (mechanical noise removal only)."""
+    """Keep call envelopes and JSON bodies; strip other bodies (mechanical noise removal)."""
     raw = load_har(har)
     artifact = preprocess_har(raw, source_har=har.name)
     payload = artifact.to_canonical_json()
@@ -103,7 +103,7 @@ def redact(
         typer.Option("--output", "-o", help="Write here (default: <name>.redacted.har)."),
     ] = None,
 ) -> None:
-    """Mask scanner-detected secrets in a HAR, producing a safe-to-commit-and-send copy."""
+    """Mask scanner-detected secrets in a HAR; review the copy before sharing."""
     dest = output or har.with_name(f"{har.stem}.redacted.har")
     removed, remaining = redact_file(har, dest)
     typer.secho(
@@ -114,7 +114,7 @@ def redact(
     if remaining == 0:
         typer.secho(
             "Verified: no detected secret value remains "
-            "(sensitive header/field NAMES stay; only values are removed).",
+            "(heuristic — review before sending or publishing).",
             fg=typer.colors.GREEN,
             err=True,
         )

@@ -4,11 +4,8 @@ DeepSeek, Mistral, and Moonshot (Kimi) all expose an OpenAI-compatible ``chat/co
 endpoint, so one class parameterised by base URL + key env var covers them all. Stateless,
 no temperature (model default), SDK imported lazily — same shape as the other providers.
 
-Reasoning: DeepSeek V4 and Kimi K3 reason ON by default, so no reasoning flag is sent here (the
-shared endpoint doesn't take a uniform reasoning parameter, and passing an unsupported one would
-400). Mistral Large has no reasoning mode and therefore stays non-reasoning — the one documented
-exception in the otherwise reasoning-equalized configuration. Where the API reports a reasoning
-token breakdown (``completion_tokens_details.reasoning_tokens``), it is captured for comparability.
+No explicit reasoning setting is sent; behavior depends on the selected model's defaults.
+The adapter records reasoning tokens when the API reports them separately.
 """
 
 from __future__ import annotations
@@ -37,9 +34,14 @@ class OpenAICompatProvider:
         self.max_tokens = max_tokens
 
     def complete(self, prompt: str) -> RawResponse:
+        api_key = os.environ.get(self.api_key_env)
+        if not api_key:
+            # The SDK otherwise falls back to OPENAI_API_KEY, even for another vendor's URL.
+            raise ValueError(f"Missing {self.api_key_env} for {self.name}.")
+
         from openai import OpenAI
 
-        client = OpenAI(base_url=self.base_url, api_key=os.environ.get(self.api_key_env))
+        client = OpenAI(base_url=self.base_url, api_key=api_key)
         started = time.monotonic()
         completion = client.chat.completions.create(
             model=self.model,

@@ -1,9 +1,8 @@
 """OpenAI provider — same Provider protocol as Anthropic, different SDK.
 
-Stateless single-shot call via the Responses API. No temperature (model default, for
-comparability). Reasoning is set to ``effort: "high"`` so it is ON and generous, matching the
-other providers in the equalized-reasoning configuration. The SDK is imported lazily so
---dry-run and tests need neither the package nor a key.
+Stateless single-shot call via the Responses API, with default sampling and high reasoning
+effort. This is a provider-specific setting, not a budget shared across models.
+The SDK is imported lazily so --dry-run does not initialize a client.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ class OpenAIProvider:
             model=self.model,
             input=prompt,
             max_output_tokens=self.max_tokens,
-            reasoning={"effort": "high"},  # reasoning ON, generous (equalized config)
+            reasoning={"effort": "high"},
         )
         latency_ms = (time.monotonic() - started) * 1000
 
