@@ -3,7 +3,7 @@
 A ``Provider`` takes a fully-rendered prompt and returns a ``RawResponse`` (text + usage +
 latency). Adding a model is one new class implementing this protocol plus one registry entry —
 nothing else in the pipeline knows which provider it is talking to. Calls are stateless and
-single-shot, so reruns are comparable months apart.
+single-shot; provider deployments and defaults can still change between runs.
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ class RawResponse(BaseModel):
     text: str
     input_tokens: int | None = None
     output_tokens: int | None = None
-    #: Reasoning/"thinking" tokens, when the provider reports them separately. Captured so the
-    #: token counts are comparable across providers that account for reasoning differently
+    #: Reasoning/"thinking" tokens, when the provider reports them separately, so the
+    #: reader can distinguish providers that account for reasoning differently
     #: (some fold it into output_tokens; Gemini reports it apart as thoughts). None = not reported.
     reasoning_tokens: int | None = None
     latency_ms: float = 0.0

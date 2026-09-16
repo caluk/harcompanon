@@ -53,8 +53,8 @@ def _run() -> RunResult:
         )
 
     return RunResult(
-        run_id="komoot_2models_2026-08-28_10-00-00",
-        fixture="komoot.pseudo.har",
+        run_id="sample_2models_2026-08-28_10-00-00",
+        fixture="sample.pseudo.har",
         created_at="2026-08-28T10:00:00+02:00",
         dry_run=False,
         providers=["anthropic", "openai"],
@@ -71,7 +71,7 @@ def _run() -> RunResult:
 def test_compare_html_is_a_matrix_with_all_cells() -> None:
     page = compare_html(_run())
     assert page.startswith("<!doctype html>")
-    for token in ("anthropic", "openai", "minimal", "structured", "komoot.pseudo.har"):
+    for token in ("anthropic", "openai", "minimal", "structured", "sample.pseudo.har"):
         assert token in page
     assert "Claude minimal" in page and "gpt minimal body" in page
     assert "RateLimitError: 429" in page  # the errored cell surfaces its error

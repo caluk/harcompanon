@@ -1,10 +1,10 @@
 """Render a run as a self-contained HTML comparison matrix — models x prompt modes.
 
 Each cell is a scrollable panel with the response rendered from markdown, plus a compact
-metadata header (model, tokens, reasoning, latency). Reading *across a row* compares a model's
-modes (minimal vs structured); reading *down a column* compares all models on the same prompt.
+metadata header (model, tokens, reasoning, latency). Reading *across a row* compares models
+on the same prompt; reading *down a column* compares a model's prompt modes.
 
-Like ``index.md``, this only *lays the responses out* — it never scores them. The page is a single
+This only lays the responses out — it never scores them. The page is a single
 file with inlined CSS (no external assets), so it opens straight in a browser and is theme-aware.
 
 The markdown renderer is a small dependency-free subset covering exactly what the responses use:
@@ -206,7 +206,7 @@ padding:6px 0;border-bottom:1px solid var(--line);margin-bottom:8px}
 .body ul,.body ol{padding-left:20px;margin:6px 0}
 </style></head>
 <body>
-<h1>__TITLE__ &nbsp;<span class="note">— comparison surface, not a scoring.
+<h1>__TITLE__ &nbsp;<span class="note">— response comparison.
 The human is the sole judge.</span></h1>
 <div class="grid">__GRID__</div>
 </body></html>

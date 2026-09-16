@@ -1,8 +1,4 @@
-"""Conventional software tests (pytest) for the CLI skeleton.
-
-NB: these are *checks* on this codebase, unrelated to "testing" in the RST sense that
-the tool itself is about.
-"""
+"""CLI discovery and installed version smoke checks."""
 
 from __future__ import annotations
 
@@ -25,8 +21,3 @@ def test_help_lists_pipeline_verbs() -> None:
     assert result.exit_code == 0
     for verb in ("preprocess", "redact", "pseudonymize", "run", "compare", "retry"):
         assert verb in result.stdout
-
-
-def test_unbuilt_verb_exits_nonzero() -> None:
-    result = runner.invoke(app, ["preprocess"])
-    assert result.exit_code == 2

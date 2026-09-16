@@ -1,10 +1,10 @@
-"""Redact scanner-detected secrets from a HAR — a safe-to-commit *and* safe-to-send copy.
+"""Redact scanner-detected secrets from a HAR; review the result before sharing.
 
 Replaces every secret VALUE the scanner finds (auth headers, tokens in query strings, body
 keys/tokens, emails) with ``<REDACTED>`` in the raw HAR text. The result is still valid JSON
-and still preprocesses. Note: the sensitive header/field *names* remain — so a re-scan still
-notes their presence — but the values are gone. Bodies that were kept as evidence lose only
-the matched secrets, nothing else.
+and still preprocesses. Sensitive header/field names remain; the scanner ignores the
+redaction marker. Literal replacement can also affect matching text elsewhere in the HAR.
+Detection is heuristic and does not guarantee that all sensitive data is removed.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def redact_text(har_text: str, raw: dict[str, Any]) -> tuple[str, int]:
     """Replace each detected secret value (in every form) in ``har_text``."""
     removed = 0
     for secret in collect_secrets(raw):
-        for form in _forms(secret):
+        for form in sorted(_forms(secret), key=len, reverse=True):
             count = har_text.count(form)
             if count:
                 har_text = har_text.replace(form, REDACTION)
@@ -60,6 +60,9 @@ def redact_file(path: Path, output: Path) -> tuple[int, int]:
         raise ValueError(f"{path} is not a valid HAR file (expected a top-level JSON object).")
 
     redacted_text, removed = redact_text(text, raw)
+    # Literal substitution must not publish malformed JSON or overwrite an existing output
+    # with it (e.g. a short secret may also match a JSON escape sequence).
+    json.loads(redacted_text)
     output.write_text(redacted_text, encoding="utf-8")
     remaining = _occurrences(redacted_text, raw)
     return removed, remaining

@@ -1,4 +1,4 @@
-"""Mechanical HAR preprocessing: strip a HAR down to its JSON API calls.
+"""Mechanical HAR preprocessing: keep call envelopes and JSON bodies.
 
 Noise removal only — never interpretation or highlighting.
 """

@@ -6,15 +6,14 @@ the pipeline with no provider call at all.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from typer.testing import CliRunner
 
 from harcompanon.cli import app
 from harcompanon.execution import DRY_RUN_TEXT, run_benchmark
-from harcompanon.providers import Provider, RawResponse
-from harcompanon.storage import store_run
+from harcompanon.providers import RawResponse
+from harcompanon.storage import load_run, store_run
 
 SAMPLE = Path(__file__).parents[1] / "data" / "sample.har"
 runner = CliRunner()
@@ -24,10 +23,13 @@ class FakeProvider:
     name = "fake"
     model = "fake-1"
 
-    def __init__(self, *, boom: bool = False) -> None:
+    def __init__(self, *, boom: bool = False, name: str = "fake") -> None:
         self.boom = boom
+        self.name = name
+        self.prompts: list[str] = []
 
     def complete(self, prompt: str) -> RawResponse:
+        self.prompts.append(prompt)
         if self.boom:
             raise RuntimeError("no network")
         return RawResponse(
@@ -40,49 +42,48 @@ class FakeProvider:
         )
 
 
-def test_fake_provider_satisfies_protocol() -> None:
-    assert isinstance(FakeProvider(), Provider)
-
-
-def test_run_id_is_readable_with_fixture_and_model() -> None:
-    result = run_benchmark(SAMPLE, [FakeProvider()], ["minimal"])
-    # e.g. "sample_fake-1_2026-08-24_12-53-24" — fixture, model slug, CET time.
+def test_run_sends_identical_prompts_to_each_provider() -> None:
+    first, second = FakeProvider(), FakeProvider(name="other")
+    result = run_benchmark(SAMPLE, [first, second], ["minimal", "structured"])
     assert result.run_id.startswith("sample_fake-1_")
-    assert "T" not in result.run_id  # readable date, not an ISO/compact integer stamp
-
-
-def test_run_calls_each_provider_and_mode() -> None:
-    result = run_benchmark(SAMPLE, [FakeProvider()], ["minimal", "structured"])
-    assert len(result.responses) == 2
-    assert {r.mode for r in result.responses} == {"minimal", "structured"}
+    assert [(r.provider, r.mode) for r in result.responses] == [
+        ("fake", "minimal"),
+        ("other", "minimal"),
+        ("fake", "structured"),
+        ("other", "structured"),
+    ]
+    assert first.prompts == second.prompts
+    assert len(first.prompts) == 2 and first.prompts[0] != first.prompts[1]
     for r in result.responses:
         assert r.error is None
-        assert r.response.text.startswith("seen ")
-        assert r.prompt_chars > 0
+        assert r.response.text == f"seen {r.prompt_chars} chars"
 
 
 def test_dry_run_makes_no_call() -> None:
-    result = run_benchmark(SAMPLE, [FakeProvider(boom=True)], ["minimal"], dry_run=True)
-    # boom=True would raise if complete() were called — dry-run must skip it.
+    provider = FakeProvider(boom=True)
+    result = run_benchmark(SAMPLE, [provider], ["minimal"], dry_run=True)
+    assert provider.prompts == []
     assert result.responses[0].response.text == DRY_RUN_TEXT
     assert result.responses[0].error is None
 
 
 def test_provider_error_is_captured_not_raised() -> None:
-    result = run_benchmark(SAMPLE, [FakeProvider(boom=True)], ["minimal"])
+    result = run_benchmark(SAMPLE, [FakeProvider(boom=True), FakeProvider(name="ok")], ["minimal"])
     item = result.responses[0]
     assert item.error is not None
     assert "no network" in item.error
     assert item.response.text == ""
+    assert result.responses[1].error is None
+    assert result.responses[1].response.text.startswith("seen ")
 
 
 def test_store_run_writes_json(tmp_path: Path) -> None:
     result = run_benchmark(SAMPLE, [FakeProvider()], ["minimal", "structured"])
     run_dir = store_run(result, tmp_path)
-    assert (run_dir / "run.json").is_file()
-    saved = json.loads((run_dir / "responses" / "fake__minimal.json").read_text())
-    assert saved["provider"] == "fake"
-    assert saved["response"]["text"].startswith("seen ")
+    assert load_run(run_dir) == result
+    for response in result.responses:
+        saved = run_dir / "responses" / f"fake__{response.mode}.json"
+        assert type(response).model_validate_json(saved.read_text()) == response
 
 
 def test_cli_run_dry_run(tmp_path: Path) -> None:
@@ -90,7 +91,10 @@ def test_cli_run_dry_run(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     run_dirs = list(tmp_path.iterdir())
     assert len(run_dirs) == 1
-    assert (run_dirs[0] / "run.json").exists()
+    saved = load_run(run_dirs[0])
+    assert saved.dry_run
+    assert {r.mode for r in saved.responses} == {"minimal", "structured"}
+    assert all(r.version == "v5" and r.error is None for r in saved.responses)
 
 
 def test_cli_run_rejects_unknown_mode(tmp_path: Path) -> None:

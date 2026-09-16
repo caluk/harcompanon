@@ -1,10 +1,8 @@
 """Anthropic (Claude) provider — the reference implementation of the Provider protocol.
 
-Stateless, single-shot ``messages.create`` calls. No temperature/top_p (defaults kept for
-comparability). Extended thinking is enabled with ``type: "adaptive"`` so reasoning is ON,
-matching the other providers in the equalized-reasoning configuration (``budget_tokens`` is
-rejected on Opus 4.8, so adaptive is the only knob). The rendered prompt is sent as one user
-message; the human judges the text.
+Stateless streaming messages calls with adaptive thinking and default sampling.
+The rendered prompt is sent as one user message; the human judges the text.
+Reasoning controls differ across providers and do not imply equal budgets.
 """
 
 from __future__ import annotations
@@ -28,12 +26,11 @@ class AnthropicProvider:
 
         client = anthropic.Anthropic()
         started = time.monotonic()
-        # Stream, so a large max_tokens can't hit the SDK's non-streaming timeout guard and a
-        # long response is never cut short.
+        # Streaming avoids the SDK's non-streaming timeout guard for large token budgets.
         with client.messages.stream(
             model=self.model,
             max_tokens=self.max_tokens,
-            thinking={"type": "adaptive"},  # reasoning ON (equalized config)
+            thinking={"type": "adaptive"},
             messages=[{"role": "user", "content": prompt}],
         ) as stream:
             message = stream.get_final_message()

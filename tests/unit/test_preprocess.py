@@ -130,7 +130,7 @@ def test_sensitive_header_values_are_redacted() -> None:
     assert login.request_body["email"] == "ada@example.com"
 
 
-def test_output_is_byte_stable_and_idempotent() -> None:
+def test_output_is_byte_stable() -> None:
     first = preprocess_file(SAMPLE).to_canonical_json()
     second = preprocess_file(SAMPLE).to_canonical_json()
     assert first == second
