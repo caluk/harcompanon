@@ -29,7 +29,7 @@ def available_modes() -> list[str]:
     return sorted(entry.name for entry in _prompts_root().iterdir() if entry.is_dir())
 
 
-def load_template(mode: str, version: str = "v2") -> str:
+def load_template(mode: str, version: str = "v5") -> str:
     """Return the raw template text for ``(mode, version)``."""
     template = _prompts_root() / mode / f"{version}.md"
     if not template.is_file():
@@ -41,7 +41,7 @@ def load_template(mode: str, version: str = "v2") -> str:
     return template.read_text(encoding="utf-8")
 
 
-def render_prompt(mode: str, artifact_json: str, version: str = "v2") -> str:
+def render_prompt(mode: str, artifact_json: str, version: str = "v5") -> str:
     """Load a template and substitute the preprocessed evidence for its placeholder."""
     template = load_template(mode, version)
     if ARTIFACT_PLACEHOLDER not in template:

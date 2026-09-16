@@ -207,8 +207,8 @@ def run(
     ] = False,
     prompt_version: Annotated[
         str,
-        typer.Option("--prompt-version", help="Prompt template version to render (e.g. v2, v4)."),
-    ] = "v2",
+        typer.Option("--prompt-version", help="Prompt template version to render (e.g. v2, v5)."),
+    ] = "v5",
 ) -> None:
     """Run one fixture across the chosen providers x prompt modes (stateless API calls)."""
     mode_list = [m.strip() for m in modes.split(",") if m.strip()]

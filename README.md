@@ -60,7 +60,7 @@ HAR fixture ─▶ preprocess ──▶ run (providers × prompts) ──▶ per
 harcompanon preprocess <har> [-o out.json] [--security-report r.md]  # clean + scan a HAR
 harcompanon redact <har> [-o out.har]                                # mask detected secrets
 harcompanon pseudonymize <har> [-o out.har] [--exclude KEY]          # swap domain PII for synthetic
-harcompanon run <fixture> [-p anthropic ...] [--modes ...] [--prompt-version v4]  # a run
+harcompanon run <fixture> [-p anthropic ...] [--modes ...] [--prompt-version v5]  # a run
                           [--model M] [--max-tokens N] [--out runs]  #   (--dry-run/--live)
 harcompanon compare <run-dir>     # -> compare.html  (matrix; auto-built on error-free live runs)
 harcompanon retry <run-dir>       # re-run only the errored responses, back into the same run
