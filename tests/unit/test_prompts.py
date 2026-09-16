@@ -51,10 +51,11 @@ def test_unknown_version_raises() -> None:
 def test_structured_has_required_sections_and_oracle() -> None:
     text = load_template("structured")
     for section in (
-        "## Start here",
+        "## Overall picture",
         "## Findings",
-        "## Coverage and blind spots",
-        "## Questions only a human can answer",
+        "## Systemic observations",
+        "## Questions for a human",
+        "## Coverage depth",
         "## Challenge your analysis",
     ):
         assert section in text
